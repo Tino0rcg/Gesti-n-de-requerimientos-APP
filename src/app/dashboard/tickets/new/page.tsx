@@ -107,8 +107,8 @@ export default function NewTicketPage() {
                     </Link>
                 </Button>
                 <div>
-                    <h1 className="text-3xl font-black tracking-tighter text-white uppercase italic">Nuevo Requerimiento</h1>
-                    <p className="text-zinc-500 text-sm font-medium">Completa los datos técnicos para ingresar una nueva solicitud bajo SLA.</p>
+                    <h1 className="text-2xl sm:text-3xl font-black tracking-tighter text-white uppercase italic">Nuevo Requerimiento</h1>
+                    <p className="text-zinc-500 text-xs sm:text-sm font-medium">Completa los datos técnicos para ingresar una nueva solicitud bajo SLA.</p>
                 </div>
             </div>
 
@@ -181,11 +181,11 @@ export default function NewTicketPage() {
                             />
                         </div>
                     </CardContent>
-                    <CardFooter className="flex justify-between border-t border-white/5 pt-6 bg-white/5">
-                        <Button variant="ghost" asChild className="text-zinc-400 hover:text-white hover:bg-white/5">
+                    <CardFooter className="flex flex-col sm:flex-row gap-3 sm:justify-between border-t border-white/5 pt-6 bg-white/5">
+                        <Button variant="ghost" asChild className="w-full sm:w-auto text-zinc-400 hover:text-white hover:bg-white/5">
                             <Link href="/dashboard">Cancelar</Link>
                         </Button>
-                        <Button type="submit" disabled={submitting} className="min-w-[180px] bg-primary hover:bg-primary/90 text-black font-black uppercase italic tracking-tighter shadow-[0_0_20px_rgba(59,130,246,0.2)]">
+                        <Button type="submit" disabled={submitting} className="w-full sm:min-w-[180px] bg-primary hover:bg-primary/90 text-black font-black uppercase italic tracking-tighter shadow-[0_0_20px_rgba(59,130,246,0.2)]">
                             {submitting ? (
                                 <div className="flex items-center gap-2">
                                     <div className="h-4 w-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />

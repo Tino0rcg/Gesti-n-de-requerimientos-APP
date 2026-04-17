@@ -15,7 +15,7 @@ export function StatCards({ tickets }: { tickets: Ticket[] }) {
   }).length;
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
       <Card className="glass-card border-none bg-blue-500/5 hover:bg-blue-500/10 transition-colors">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-xs font-bold uppercase tracking-wider text-blue-400">Nuevos</CardTitle>

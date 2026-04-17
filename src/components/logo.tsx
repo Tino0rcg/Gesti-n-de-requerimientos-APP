@@ -1,11 +1,16 @@
-import { Ticket } from 'lucide-react';
+import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
 export function Logo({ className }: { className?: string }) {
   return (
     <div className={cn('flex items-center gap-2', className)}>
-      <Ticket className="size-6 text-primary" />
-      <span className="text-xl font-bold text-primary">ServiDesk</span>
+      <Image 
+        src="https://github.com/Tino0rcg/imagenes-pagina-online-2.0/blob/main/LOGO%20ONLINE%20SYSTEM%20NORMAL.png?raw=true" 
+        alt="Online System Logo" 
+        width={100} 
+        height={40}
+        className="object-contain"
+      />
     </div>
   );
 }

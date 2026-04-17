@@ -70,14 +70,14 @@ export function AnalyticsCharts({ tickets, allUsers }: { tickets: Ticket[], allU
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="grid gap-6 grid-cols-1 sm:grid-cols-2">
       {/* Gráfico 1: Tickets por Empresa */}
       <Card className="glass-card border-white/5 bg-black/20">
         <CardHeader>
           <CardTitle className="text-sm font-bold uppercase tracking-wider text-zinc-400">Demanda por Organización</CardTitle>
           <CardDescription>Volumen total de requerimientos por cliente</CardDescription>
         </CardHeader>
-        <CardContent className="h-[300px]">
+        <CardContent className="h-[250px] sm:h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={companyData} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" horizontal={false} />
@@ -99,7 +99,7 @@ export function AnalyticsCharts({ tickets, allUsers }: { tickets: Ticket[], allU
           <CardTitle className="text-sm font-bold uppercase tracking-wider text-zinc-400">Puntualidad SLA por Categoría</CardTitle>
           <CardDescription>% de cumplimiento según el tipo de requerimiento</CardDescription>
         </CardHeader>
-        <CardContent className="h-[300px]">
+        <CardContent className="h-[250px] sm:h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={techServiceSla}>
               <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
@@ -126,7 +126,7 @@ export function AnalyticsCharts({ tickets, allUsers }: { tickets: Ticket[], allU
           <CardTitle className="text-sm font-bold uppercase tracking-wider text-zinc-400">Incidencia por Categoría</CardTitle>
           <CardDescription>Servicios con mayor frecuencia de reporte</CardDescription>
         </CardHeader>
-        <CardContent className="h-[300px]">
+        <CardContent className="h-[250px] sm:h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -157,7 +157,7 @@ export function AnalyticsCharts({ tickets, allUsers }: { tickets: Ticket[], allU
           <CardTitle className="text-sm font-bold uppercase tracking-wider text-zinc-400">Tiempos de Respuesta (Catálogo)</CardTitle>
           <CardDescription>Ranking de servicios por horas de SLA (Max a Min)</CardDescription>
         </CardHeader>
-        <CardContent className="h-[300px]">
+        <CardContent className="h-[250px] sm:h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={slaBase} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" horizontal={false} />

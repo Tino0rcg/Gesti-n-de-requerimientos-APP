@@ -57,11 +57,14 @@ export default function DashboardLayout({
     return (
         <div className="flex min-h-screen w-full flex-col bg-muted/40">
             <aside className="fixed inset-y-0 left-0 z-10 hidden w-60 flex-col border-r border-white/10 glass-panel sm:flex">
-                <div className="flex px-6 py-6 items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
-                        <Ticket className="h-6 w-6" />
-                    </div>
-                    <span className="font-heading font-bold text-xl tracking-tight">ServiDesk</span>
+                <div className="flex px-6 py-4 items-center justify-center">
+                    <Image 
+                        src="https://github.com/Tino0rcg/imagenes-pagina-online-2.0/blob/main/LOGO%20ONLINE%20SYSTEM%20NORMAL.png?raw=true" 
+                        alt="Online System Logo" 
+                        width={140} 
+                        height={80}
+                        className="object-contain"
+                    />
                 </div>
                 
                 <nav className="flex-1 overflow-y-auto flex flex-col gap-2 px-4 mt-4 pb-4 custom-scrollbar">

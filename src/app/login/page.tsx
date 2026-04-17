@@ -6,6 +6,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
 import { login } from "./actions";
+import Image from "next/image";
+import { ShieldCheck, ArrowLeft, Loader2 } from "lucide-react";
+import Link from "next/link";
 
 function errorToSpanish(message: string): string {
     if (message.includes("Invalid login credentials")) {
@@ -45,49 +48,77 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="flex h-screen w-full items-center justify-center bg-muted/40 px-4">
-            <Card className="w-full max-w-md shadow-lg border-primary/20">
-                <CardHeader className="space-y-1 text-center">
-                    <CardTitle className="text-2xl font-bold tracking-tight">Gestor de Requerimientos</CardTitle>
-                    <CardDescription>
-                        Ingresa tus credenciales para acceder a la plataforma
-                    </CardDescription>
+        <div className="min-h-screen w-full flex items-center justify-center bg-[#09090b] px-4 relative overflow-hidden">
+            {/* Background Decor */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
+            
+            <Link href="/" className="absolute top-8 left-8 flex items-center gap-2 text-zinc-500 hover:text-white transition-colors text-sm font-bold uppercase tracking-widest">
+                <ArrowLeft className="h-4 w-4" />
+                Regresar
+            </Link>
+
+            <Card className="w-full max-w-md glass-card border-white/10 bg-black/40 backdrop-blur-xl shadow-2xl overflow-hidden relative z-10">
+                <div className="h-1 w-full bg-gradient-to-r from-transparent via-primary to-transparent" />
+                <CardHeader className="space-y-4 text-center pt-8 pb-4">
+                    <div className="flex justify-center mb-2">
+                        <div className="p-3 rounded-2xl bg-white/5 border border-white/10 shadow-inner">
+                            <Image 
+                                src="https://github.com/Tino0rcg/imagenes-pagina-online-2.0/blob/main/LOGO%20ONLINE%20SYSTEM%20NORMAL.png?raw=true" 
+                                alt="Online System Logo" 
+                                width={60} 
+                                height={60}
+                                className="object-contain"
+                            />
+                        </div>
+                    </div>
+                    <div className="space-y-1">
+                        <CardTitle className="text-2xl font-black tracking-tighter text-white uppercase italic">Acceso Online System</CardTitle>
+                        <CardDescription className="text-zinc-500 font-medium italic">
+                            Identifíquese para gestionar sus requerimientos.
+                        </CardDescription>
+                    </div>
                 </CardHeader>
                 <form onSubmit={handleLogin}>
                     <CardContent className="space-y-4">
                         {errorMsg && (
-                            <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">
+                            <div className="p-3 text-xs font-bold text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2">
+                                <ShieldCheck className="h-4 w-4" />
                                 {errorMsg}
                             </div>
                         )}
                         <div className="space-y-2">
-                            <Label htmlFor="email">Correo Electrónico</Label>
+                            <Label htmlFor="email" className="text-zinc-400 text-xs font-bold uppercase tracking-widest ml-1">Correo Corporativo</Label>
                             <Input 
                                 id="email" 
                                 type="email" 
-                                placeholder="tucorreo@empresa.com" 
+                                placeholder="usuario@online-system.cl" 
                                 required 
+                                className="bg-black/40 border-white/10 text-white h-11 focus:border-primary/50 transition-all rounded-xl"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                             />
                         </div>
                         <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="password">Contraseña</Label>
-                            </div>
+                            <Label htmlFor="password" title="Contraseña" className="text-zinc-400 text-xs font-bold uppercase tracking-widest ml-1">Contraseña</Label>
                             <Input 
                                 id="password" 
                                 type="password" 
                                 required 
                                 placeholder="••••••••"
+                                className="bg-black/40 border-white/10 text-white h-11 focus:border-primary/50 transition-all rounded-xl"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                             />
                         </div>
                     </CardContent>
-                    <CardFooter>
-                        <Button className="w-full" type="submit" disabled={loading}>
-                            {loading ? "Autenticando..." : "Iniciar Sesión"}
+                    <CardFooter className="pt-2 pb-8">
+                        <Button className="w-full h-12 bg-primary hover:bg-primary/90 text-black font-black uppercase italic tracking-tighter shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95 rounded-xl" type="submit" disabled={loading}>
+                            {loading ? (
+                                <div className="flex items-center gap-2">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Autenticando...
+                                </div>
+                            ) : "Entrar al Sistema"}
                         </Button>
                     </CardFooter>
                 </form>

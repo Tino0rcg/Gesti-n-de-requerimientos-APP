@@ -82,8 +82,8 @@ export function TicketTable({ tickets, allUsers }: { tickets: Ticket[], allUsers
   const columns: ColumnDef<Ticket>[] = React.useMemo(() => [
     {
       accessorKey: "id",
-      header: "Ticket ID",
-      cell: ({ row }) => <Link href={`/dashboard/tickets`} className="hover:underline font-mono text-xs">{row.getValue("id")}</Link>,
+      header: <span className="hidden md:inline">Ticket ID</span>,
+      cell: ({ row }) => <Link href={`/dashboard/tickets`} className="hover:underline font-mono text-xs hidden md:inline">{row.getValue("id")}</Link>,
     },
     {
       accessorKey: "subject",
@@ -126,21 +126,21 @@ export function TicketTable({ tickets, allUsers }: { tickets: Ticket[], allUsers
     },
     {
       accessorKey: "priority",
-      header: "Priority",
+      header: <span className="hidden lg:table-cell">Priority</span>,
       cell: ({ row }) => {
           const priority = row.getValue("priority") as TicketPriority;
-          return <Badge variant="outline" className={priorityColorMap[priority]}>{priority}</Badge>
+          return <Badge variant="outline" className={`hidden lg:inline-flex ${priorityColorMap[priority]}`}>{priority}</Badge>
       },
     },
     {
       accessorKey: "assigneeId",
-      header: "Assignee",
+      header: <span className="hidden sm:table-cell">Assignee</span>,
       cell: ({ row }) => {
           const assignee = getAssignee(row.getValue("assigneeId"));
-          if (!assignee) return <span className="text-muted-foreground">Unassigned</span>;
+          if (!assignee) return <span className="text-muted-foreground hidden sm:inline">Unassigned</span>;
   
           return (
-              <div className="flex items-center gap-2">
+              <div className="hidden sm:flex items-center gap-2">
                   <Avatar className="h-6 w-6 border border-white/10">
                       <AvatarFallback className="bg-blue-500/20 text-blue-400 text-[10px]">
                           {assignee.name.charAt(0)}
@@ -154,11 +154,11 @@ export function TicketTable({ tickets, allUsers }: { tickets: Ticket[], allUsers
     {
       accessorKey: "updatedAt",
       header: ({ column }) => (
-        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+        <Button variant="ghost" className="hidden lg:flex" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
           Last Updated <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => <div className="text-xs text-muted-foreground">{format(row.getValue("updatedAt"), "PPp")}</div>,
+      cell: ({ row }) => <div className="text-xs text-muted-foreground hidden lg:block">{format(row.getValue("updatedAt"), "PPp")}</div>,
     },
   ], [allUsers]);
 
@@ -230,7 +230,8 @@ export function TicketTable({ tickets, allUsers }: { tickets: Ticket[], allUsers
         </DropdownMenu>
       </div>
       <div className="rounded-md border border-white/10 bg-black/40 backdrop-blur-sm overflow-hidden text-white">
-        <Table>
+        <div className="overflow-x-auto">
+          <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="border-white/10 hover:bg-transparent">
@@ -276,7 +277,8 @@ export function TicketTable({ tickets, allUsers }: { tickets: Ticket[], allUsers
               </TableRow>
             )}
           </TableBody>
-        </Table>
+          </Table>
+        </div>
       </div>
       <div className="flex items-center justify-end space-x-2 py-4">
         <div className="flex-1 text-sm text-zinc-500">
@@ -308,7 +310,7 @@ export function TicketTable({ tickets, allUsers }: { tickets: Ticket[], allUsers
       <Sheet open={!!selectedId} onOpenChange={(open) => !open && setSelectedId(null)}>
           <SheetContent className="sm:max-w-xl glass-panel border-l-primary/20 p-0 overflow-y-auto">
               {selectedTicket && (
-                  <TicketDetailsInfo ticket={selectedTicket} />
+                  <TicketDetailsInfo ticketId={selectedId} />
               )}
           </SheetContent>
       </Sheet>
