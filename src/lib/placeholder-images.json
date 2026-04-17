@@ -1,3 +1,40 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "user-1",
+      "description": "Avatar for Sarah Lee",
+      "imageUrl": "https://picsum.photos/seed/1/100/100",
+      "imageHint": "woman smiling"
+    },
+    {
+      "id": "user-2",
+      "description": "Avatar for Mike Chen",
+      "imageUrl": "https://picsum.photos/seed/2/100/100",
+      "imageHint": "man glasses"
+    },
+    {
+      "id": "user-3",
+      "description": "Avatar for Emily Rodriguez",
+      "imageUrl": "https://picsum.photos/seed/3/100/100",
+      "imageHint": "professional woman"
+    },
+    {
+      "id": "user-4",
+      "description": "Avatar for David Kim",
+      "imageUrl": "https://picsum.photos/seed/4/100/100",
+      "imageHint": "man headphones"
+    },
+    {
+      "id": "user-5",
+      "description": "Avatar for Jessica Williams",
+      "imageUrl": "https://picsum.photos/seed/5/100/100",
+      "imageHint": "woman smiling"
+    },
+    {
+      "id": "user-6",
+      "description": "Avatar for Chris Green",
+      "imageUrl": "https://picsum.photos/seed/6/100/100",
+      "imageHint": "man smiling"
+    }
+  ]
 }
