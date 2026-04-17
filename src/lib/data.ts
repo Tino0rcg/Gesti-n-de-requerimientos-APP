@@ -1,82 +1,124 @@
-import type { User, Ticket, Note } from './definitions';
+import { Note, Ticket, User } from './definitions';
+
+export const empresas = [
+    { id: "EMP-001", nombre: "Vanguardia SpA", rut: "76.000.000-1", plan: "Corporativo", estado: "Activo", usuarios: 15 },
+    { id: "EMP-002", nombre: "TechNova Solutions", rut: "76.123.456-7", plan: "Premium", estado: "Activo", usuarios: 12 },
+    { id: "EMP-003", nombre: "Inversiones del Norte", rut: "77.987.654-3", plan: "Básico", estado: "Inactivo", usuarios: 3 },
+    { id: "EMP-004", nombre: "Logística Express", rut: "99.456.789-0", plan: "Pro", estado: "Activo", usuarios: 25 },
+];
+
+export const EMPRESAS_PERMITIDAS = empresas.map(e => e.nombre);
+
+export const SERVICE_CATALOG = [
+    { id: "caida_sistema", nombre: "Caída Crítica de Sistema / Servidor", category: "Hardware", priority: "Crítica", slaHours: 4 },
+    { id: "problemas_red", nombre: "Intermitencia o Caída de Red", category: "Redes", priority: "Alta", slaHours: 12 },
+    { id: "falla_software", nombre: "Falla de Software o Error en App", category: "Software", priority: "Media", slaHours: 48 },
+    { id: "accesos", nombre: "Recuperación de Accesos o Contraseñas", category: "Accesos", priority: "Baja", slaHours: 72 },
+    { id: "soporte_general", nombre: "Consultas de Soporte General", category: "Otro", priority: "Baja", slaHours: 72 },
+];
 
 export const users: User[] = [
-  { id: 'USR-1', name: 'Sarah Lee', email: 'sarah.lee@example.com', avatarUrl: 'https://picsum.photos/seed/1/100/100', role: 'Agent' },
-  { id: 'USR-2', name: 'Mike Chen', email: 'mike.chen@example.com', avatarUrl: 'https://picsum.photos/seed/2/100/100', role: 'Agent' },
-  { id: 'USR-3', name: 'Emily Rodriguez', email: 'emily.r@example.com', avatarUrl: 'https://picsum.photos/seed/3/100/100', role: 'Manager' },
-  { id: 'USR-4', name: 'David Kim', email: 'david.kim@example.com', avatarUrl: 'https://picsum.photos/seed/4/100/100', role: 'User' },
+  { id: 'USR-1', name: 'Ramiro Contreras', email: 'rcontreras@vanguardia.cl', avatarUrl: '/avatars/1.png', role: 'Manager', empresa: 'Vanguardia SpA' },
+  { id: 'USR-2', name: 'Antonia Paz', email: 'apaz@vanguardia.cl', avatarUrl: '/avatars/2.png', role: 'Agent', empresa: 'Vanguardia SpA' },
+  { id: 'USR-3', name: 'Juan Manuel Soporte', email: 'jms@vanguardia.cl', avatarUrl: '/avatars/3.png', role: 'Agent', empresa: 'Vanguardia SpA' },
+  { id: 'USR-4', name: 'Claudio Garrido', email: 'cgarrido@alphacorp.cl', avatarUrl: '/avatars/4.png', role: 'User', empresa: 'TechNova Solutions' },
+  { id: 'USR-5', name: 'Jorge Ramírez', email: 'jramirez@vanguardia.cl', avatarUrl: '/avatars/5.png', role: 'Agent', empresa: 'Vanguardia SpA' },
+  { id: 'USR-6', name: 'Lucía Fernández', email: 'lfernandez@vanguardia.cl', avatarUrl: '/avatars/6.png', role: 'Agent', empresa: 'Vanguardia SpA' },
 ];
+
+export const tecnicos = [
+  { id: "USR-5", nombre: "Jorge Ramírez", especialidad: "Soporte Nivel 1", ticketsActivos: 3, estado: "Disponible", rating: 4.8 },
+  { id: "USR-6", nombre: "Lucía Fernández", especialidad: "Infraestructura", ticketsActivos: 5, estado: "En Terreno", rating: 4.9 },
+  { id: "USR-2", nombre: "Antonia Paz", especialidad: "Redes y Servidores", ticketsActivos: 1, estado: "Disponible", rating: 5.0 },
+  { id: "USR-3", nombre: "Juan Manuel Soporte", especialidad: "Soporte Nivel 2", ticketsActivos: 0, estado: "Disponible", rating: 4.7 },
+];
+
+export const getLeastBusyTech = () => {
+    return [...tecnicos].sort((a, b) => a.ticketsActivos - b.ticketsActivos)[0];
+};
 
 export const tickets: Ticket[] = [
   {
     id: 'TKT-001',
-    subject: 'Cannot connect to company Wi-Fi',
-    description: 'My laptop is unable to connect to the "Corporate" Wi-Fi network. I have tried restarting my machine and forgetting the network, but the issue persists. My colleagues in the same area are not facing this problem.',
-    status: 'Open',
-    priority: 'High',
-    category: 'Network',
+    subject: 'No puedo conectar al Wi-Fi de la empresa',
+    description: 'Mi laptop no se puede conectar a la red "Corporate". Ya intenté reiniciar la máquina.',
+    status: 'Ingresado',
+    priority: 'Alta',
+    category: 'Redes',
     createdAt: new Date('2023-10-26T10:00:00Z'),
     updatedAt: new Date('2023-10-26T10:00:00Z'),
+    dueAt: new Date(new Date().getTime() + 24 * 60 * 60 * 1000), // Vence mañana (Verde)
+    resolvedAt: null,
     submitterId: 'USR-4',
     assigneeId: 'USR-1',
   },
   {
     id: 'TKT-002',
-    subject: 'Request for Adobe Photoshop License',
-    description: 'I need a license for Adobe Photoshop for a new design project. My manager has approved this request. Please let me know the process for installation.',
-    status: 'In Progress',
-    priority: 'Medium',
+    subject: 'Solicitud licencia Photoshop',
+    description: 'Necesito una licencia de Adobe Photoshop para diseño. Aprobada por gerente.',
+    status: 'En proceso',
+    priority: 'Media',
     category: 'Software',
     createdAt: new Date('2023-10-26T11:30:00Z'),
     updatedAt: new Date('2023-10-27T14:00:00Z'),
+    dueAt: new Date(new Date().getTime() - 24 * 60 * 60 * 1000), // Venció ayer (Amarillo)
+    resolvedAt: null,
     submitterId: 'USR-4',
     assigneeId: 'USR-2',
   },
   {
     id: 'TKT-003',
-    subject: 'Printer is not working',
-    description: 'The main office printer on the 3rd floor (Model HP LaserJet Pro M404dn) is displaying a "Paper Jam" error, but there is no visible paper jam. I have tried turning it off and on again.',
-    status: 'Resolved',
-    priority: 'Medium',
+    subject: 'Impresora no funciona',
+    description: 'La impresora principal muestra "Atasco de papel" pero no se ven hojas atoradas.',
+    status: 'Espera de aprobación',
+    priority: 'Media',
     category: 'Hardware',
     createdAt: new Date('2023-10-25T09:00:00Z'),
     updatedAt: new Date('2023-10-25T15:45:00Z'),
+    dueAt: new Date(new Date().getTime() + 48 * 60 * 60 * 1000), // Vence en 2 días (Verde)
+    resolvedAt: null,
     submitterId: 'USR-4',
     assigneeId: 'USR-1',
   },
   {
     id: 'TKT-004',
-    subject: 'Password Reset for CRM',
-    description: 'I have forgotten my password for the company CRM and am now locked out after too many failed attempts. I need an urgent password reset to access client data.',
-    status: 'Closed',
-    priority: 'Critical',
-    category: 'Account',
+    subject: 'Reset de contraseña CRM',
+    description: 'Olvidé mi contraseña y estoy bloqueado fuera del sistema.',
+    status: 'Terminado',
+    priority: 'Crítica',
+    category: 'Cuentas',
     createdAt: new Date('2023-10-24T16:20:00Z'),
     updatedAt: new Date('2023-10-24T16:50:00Z'),
+    dueAt: new Date('2023-10-24T20:20:00Z'), // Vencía a las 20:20
+    resolvedAt: new Date('2023-10-24T16:50:00Z'), // Resuelto ANTES (Azul)
     submitterId: 'USR-4',
     assigneeId: 'USR-2',
   },
   {
     id: 'TKT-005',
-    subject: 'Suspicious Email Received',
-    description: 'I received an email pretending to be from our CEO asking for gift card purchases. I did not click any links, but I wanted to report it to the security team.',
-    status: 'Open',
-    priority: 'High',
-    category: 'Security',
+    subject: 'Correo sospechoso',
+    description: 'Recibí un correo falso que finge ser del CEO.',
+    status: 'Terminado',
+    priority: 'Alta',
+    category: 'Seguridad',
     createdAt: new Date('2023-10-27T13:00:00Z'),
     updatedAt: new Date('2023-10-27T13:05:00Z'),
+    dueAt: new Date('2023-10-27T17:00:00Z'), // Vencía el mismo día a las 17
+    resolvedAt: new Date('2023-10-28T10:00:00Z'), // Se resolvió AL DÍA SIGUIENTE! Tarde (Rojo)
     submitterId: 'USR-4',
     assigneeId: 'USR-3',
   },
   {
     id: 'TKT-006',
-    subject: 'Monitor flickering issue',
-    description: 'My secondary monitor has started flickering intermittently. I have checked the cable connections, and they seem secure.',
-    status: 'In Progress',
-    priority: 'Low',
+    subject: 'Pantalla parpadea',
+    description: 'Mi pantalla secundaria parpadea mucho, revisé los cables y están bien.',
+    status: 'En proceso',
+    priority: 'Baja',
     category: 'Hardware',
     createdAt: new Date('2023-10-27T15:00:00Z'),
     updatedAt: new Date('2023-10-27T15:00:00Z'),
+    dueAt: new Date(new Date().getTime() + 72 * 60 * 60 * 1000), // Vence en 3 dias
+    resolvedAt: null,
     submitterId: 'USR-4',
     assigneeId: null,
   },

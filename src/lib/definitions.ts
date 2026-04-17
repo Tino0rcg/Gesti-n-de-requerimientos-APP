@@ -4,11 +4,12 @@ export type User = {
     email: string;
     avatarUrl: string;
     role: 'User' | 'Agent' | 'Manager';
+    empresa: string;
   };
   
-  export type TicketStatus = 'Open' | 'In Progress' | 'Resolved' | 'Closed';
-  export type TicketPriority = 'Low' | 'Medium' | 'High' | 'Critical';
-  export type TicketCategory = 'Network' | 'Software' | 'Hardware' | 'Account' | 'Security' | 'Other';
+export type TicketStatus = 'Ingresado' | 'En proceso' | 'Espera de aprobación' | 'Terminado';
+  export type TicketPriority = 'Baja' | 'Media' | 'Alta' | 'Crítica';
+  export type TicketCategory = 'Redes' | 'Software' | 'Hardware' | 'Cuentas' | 'Seguridad' | 'Otro';
   
   export type Ticket = {
     id: string;
@@ -19,6 +20,8 @@ export type User = {
     category: TicketCategory;
     createdAt: Date;
     updatedAt: Date;
+    dueAt: Date;
+    resolvedAt: Date | null;
     submitterId: string;
     assigneeId: string | null;
   };

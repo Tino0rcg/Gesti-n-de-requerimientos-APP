@@ -1,13 +1,14 @@
-import type {Metadata} from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
+import type { Metadata } from "next";
+import { Inter, Outfit } from "next/font/google";
+import "./globals.css";
 import { Toaster } from '@/components/ui/toaster';
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" });
 
 export const metadata: Metadata = {
-  title: 'ServiDesk',
-  description: 'IT Ticketing System',
+  title: "Gestor UI Premium",
+  description: "Plataforma de gestión multicompañía de última generación",
 };
 
 export default function RootLayout({
@@ -16,13 +17,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-      </head>
-      <body className={`font-body antialiased h-full ${inter.variable}`}>
+    <html lang="es" className="dark h-full antialiased">
+      <body
+        className={`${inter.variable} ${outfit.variable} font-sans min-h-screen relative bg-background text-foreground selection:bg-primary/30`}
+      >
+        {/* Absolute Background Mesh */}
+        <div className="fixed inset-0 -z-50 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900/40 via-[#030712] to-[#030712]"></div>
+        
         {children}
         <Toaster />
       </body>

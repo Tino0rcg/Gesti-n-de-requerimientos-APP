@@ -1,16 +1,19 @@
 import Link from "next/link";
 import {
-    CircleUser,
+    Building2,
     Home,
     LineChart,
-    Package,
-    Package2,
+    PieChart,
+    BarChart,
     PanelLeft,
     PlusCircle,
     Search,
     Settings,
     Ticket,
-    Users2,
+    Users,
+    Wrench,
+    Archive,
+    BriefcaseBusiness,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -41,89 +44,51 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { Logo } from "@/components/logo";
 import { UserNav } from "@/components/user-nav";
+import { NavLinks } from "@/components/dashboard/nav-links";
 
 export default function DashboardLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
+
     return (
         <div className="flex min-h-screen w-full flex-col bg-muted/40">
-            <aside className="fixed inset-y-0 left-0 z-10 hidden w-60 flex-col border-r bg-background sm:flex">
-                <nav className="flex flex-col items-center gap-4 px-2 sm:py-5">
+            <aside className="fixed inset-y-0 left-0 z-10 hidden w-60 flex-col border-r border-white/10 glass-panel sm:flex">
+                <div className="flex px-6 py-6 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
+                        <Ticket className="h-6 w-6" />
+                    </div>
+                    <span className="font-heading font-bold text-xl tracking-tight">ServiDesk</span>
+                </div>
+                
+                <nav className="flex-1 overflow-y-auto flex flex-col gap-2 px-4 mt-4 pb-4 custom-scrollbar">
+                    {/* Botón para crear requerimiento */}
+                    <Link
+                        href="/dashboard/tickets/new"
+                        className="flex items-center justify-center gap-3 rounded-lg bg-primary text-primary-foreground px-3 py-2.5 transition-colors hover:bg-primary/90 font-bold mb-4 shadow-lg shadow-primary/20"
+                    >
+                        <PlusCircle className="h-5 w-5" />
+                        <span>Nuevo Ticket</span>
+                    </Link>
+
+                    <NavLinks />
+                </nav>
+
+                <nav className="mt-auto px-4 pb-6">
                     <Link
                         href="#"
-                        className="group flex h-9 w-9 shrink-0 items-center justify-center gap-2 rounded-full bg-primary text-lg font-semibold text-primary-foreground md:h-8 md:w-8 md:text-base"
+                        className="flex items-center gap-3 rounded-lg text-muted-foreground px-3 py-2.5 transition-all hover:bg-white/5 hover:text-foreground"
                     >
-                        <Ticket className="h-4 w-4 transition-all group-hover:scale-110" />
-                        <span className="sr-only">ServiDesk</span>
+                        <Settings className="h-5 w-5" />
+                        <span>Configuración</span>
                     </Link>
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Link
-                                    href="/dashboard"
-                                    className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground md:h-8 md:w-8"
-                                >
-                                    <Home className="h-5 w-5" />
-                                    <span className="sr-only">Dashboard</span>
-                                </Link>
-                            </TooltipTrigger>
-                            <TooltipContent side="right">Dashboard</TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Link
-                                    href="/tickets/new"
-                                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent text-accent-foreground transition-colors hover:text-foreground md:h-8 md:w-8"
-                                >
-                                    <PlusCircle className="h-5 w-5" />
-                                    <span className="sr-only">New Ticket</span>
-                                </Link>
-                            </TooltipTrigger>
-                            <TooltipContent side="right">New Ticket</TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Link
-                                    href="/dashboard/reports"
-                                    className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground md:h-8 md:w-8"
-                                >
-                                    <LineChart className="h-5 w-5" />
-                                    <span className="sr-only">Reports</span>
-                                </Link>
-                            </TooltipTrigger>
-                            <TooltipContent side="right">Reports</TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                </nav>
-                <nav className="mt-auto flex flex-col items-center gap-4 px-2 sm:py-5">
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Link
-                                    href="#"
-                                    className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground md:h-8 md:w-8"
-                                >
-                                    <Settings className="h-5 w-5" />
-                                    <span className="sr-only">Settings</span>
-                                </Link>
-                            </TooltipTrigger>
-                            <TooltipContent side="right">Settings</TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
                 </nav>
             </aside>
             <div className="flex flex-col sm:gap-4 sm:py-4 sm:pl-60">
-                <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
+                <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-white/5 glass-panel px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
                     <Sheet>
                         <SheetTrigger asChild>
                             <Button size="icon" variant="outline" className="sm:hidden">
@@ -138,29 +103,18 @@ export default function DashboardLayout({
                                     className="group flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-full bg-primary text-lg font-semibold text-primary-foreground md:text-base"
                                 >
                                     <Ticket className="h-5 w-5 transition-all group-hover:scale-110" />
-                                    <span className="sr-only">ServiDesk</span>
+                                    <span className="sr-only">GestorRequerimientos</span>
                                 </Link>
                                 <Link
-                                    href="/dashboard"
-                                    className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground"
-                                >
-                                    <Home className="h-5 w-5" />
-                                    Dashboard
-                                </Link>
-                                <Link
-                                    href="/tickets/new"
-                                    className="flex items-center gap-4 px-2.5 text-foreground"
+                                    href="/dashboard/tickets/new"
+                                    className="flex items-center gap-4 px-2.5 text-primary"
                                 >
                                     <PlusCircle className="h-5 w-5" />
-                                    New Ticket
+                                    Nuevo Requerimiento
                                 </Link>
-                                <Link
-                                    href="/dashboard/reports"
-                                    className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground"
-                                >
-                                    <LineChart className="h-5 w-5" />
-                                    Reports
-                                </Link>
+                                <div className="flex flex-col gap-2 mt-4">
+                                    <NavLinks />
+                                </div>
                             </nav>
                         </SheetContent>
                     </Sheet>

@@ -14,7 +14,7 @@ export default function DashboardPage() {
             Here's a list of all tickets for this month!
           </p>
         </div>
-        <Link href="/tickets/new">
+        <Link href="/dashboard/tickets/new">
           <Button>
             <PlusCircle className="mr-2 h-4 w-4" />
             New Ticket
