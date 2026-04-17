@@ -1,19 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { 
+    Building2, 
+    MoreHorizontal, 
+    PlusCircle, 
+    Search 
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MoreHorizontal, PlusCircle, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { empresas as initialEmpresas } from "@/lib/data";
 
 export default function ClientesPage() {
-    const [empresas, setEmpresas] = useState(initialEmpresas);
+    const supabase = createClient();
+    const [empresas, setEmpresas] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [isSheetOpen, setIsSheetOpen] = useState(false);
 
@@ -22,30 +29,42 @@ export default function ClientesPage() {
         nombre: "",
         rut: "",
         plan: "Pro",
-        estado: "Activo",
+        status: "Activo",
     });
 
-    const filteredEmpresas = empresas.filter(emp => 
-        emp.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        emp.rut.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    useEffect(() => {
+        const loadCompanies = async () => {
+            const { data } = await supabase.from('companies').select('*');
+            if (data) setEmpresas(data);
+            setLoading(false);
+        };
+        loadCompanies();
+    }, []);
 
-    const handleNuevaEmpresa = (e: React.FormEvent) => {
+    const handleNuevaEmpresa = async (e: React.FormEvent) => {
         e.preventDefault();
-        const nueva = {
-            id: `EMP-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
-            nombre: formData.nombre,
+        
+        const { error } = await supabase.from('companies').insert({
+            name: formData.nombre,
             rut: formData.rut,
             plan: formData.plan,
-            estado: formData.estado,
-            usuarios: 0
-        };
+            status: formData.status
+        });
 
-        initialEmpresas.push(nueva);
-        setEmpresas([...initialEmpresas]);
-        setIsSheetOpen(false);
-        setFormData({ nombre: "", rut: "", plan: "Pro", estado: "Activo" });
+        if (!error) {
+            const { data } = await supabase.from('companies').select('*');
+            if (data) setEmpresas(data);
+            setIsSheetOpen(false);
+            setFormData({ nombre: "", rut: "", plan: "Pro", status: "Activo" });
+        }
     };
+
+    const filteredEmpresas = (empresas || []).filter(emp => 
+        (emp.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (emp.rut || "").toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    if (loading) return <div className="p-8 text-center text-zinc-500 italic">Conectando con el registro corporativo...</div>;
 
     return (
         <div className="flex flex-col gap-6">
@@ -99,7 +118,7 @@ export default function ClientesPage() {
                                         <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
                                             <Building2 className="h-4 w-4 text-primary" />
                                         </div>
-                                        {empresa.nombre}
+                                        {empresa.name}
                                     </TableCell>
                                     <TableCell className="text-zinc-400 font-mono text-xs">{empresa.rut}</TableCell>
                                     <TableCell>
@@ -107,12 +126,12 @@ export default function ClientesPage() {
                                             {empresa.plan}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell className="text-zinc-300">{empresa.usuarios} activos</TableCell>
+                                    <TableCell className="text-zinc-300">0 activos</TableCell>
                                     <TableCell>
-                                        <Badge variant={empresa.estado === 'Activo' ? 'default' : 'secondary'} className={
-                                            empresa.estado === 'Activo' ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30 border-green-500/20' : ''
+                                        <Badge variant="outline" className={
+                                            empresa.status === 'Activo' ? 'bg-green-500/20 text-green-400 border-green-500/20' : ''
                                         }>
-                                            {empresa.estado}
+                                            {empresa.status}
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right">

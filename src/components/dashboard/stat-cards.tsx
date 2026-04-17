@@ -1,55 +1,62 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { tickets } from "@/lib/data";
-import { Ticket, Clock, CheckCircle, CircleDot } from "lucide-react";
+import type { Ticket } from "@/lib/definitions";
+import { CheckCircle, CircleDot, AlertTriangle, Ticket as TicketIcon } from "lucide-react";
+import { getSlaStatus } from "@/lib/sla-utils";
 
-export function StatCards() {
-  const openTickets = tickets.filter(t => t.status === 'Open').length;
-  const inProgressTickets = tickets.filter(t => t.status === 'In Progress').length;
-  const resolvedTickets = tickets.filter(t => t.status === 'Resolved').length;
+export function StatCards({ tickets }: { tickets: Ticket[] }) {
+  const openTickets = tickets.filter(t => t.status === 'Ingresado').length;
+  const inProgressTickets = tickets.filter(t => t.status === 'En proceso').length;
+  const resolvedTickets = tickets.filter(t => t.status === 'Terminado').length;
   
-  // This would be a real calculation in a real app
-  const avgResolutionTime = "8h 24m";
+  // Calculate critical SLA status
+  const criticalTickets = tickets.filter(t => {
+    const sla = getSlaStatus(t);
+    return sla.label === 'SLA VENCIDO' || sla.label === 'SLA CRÍTICO';
+  }).length;
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <Card>
+      <Card className="glass-card border-none bg-blue-500/5 hover:bg-blue-500/10 transition-colors">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Open Tickets</CardTitle>
-          <CircleDot className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-xs font-bold uppercase tracking-wider text-blue-400">Nuevos</CardTitle>
+          <CircleDot className="h-4 w-4 text-blue-400" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{openTickets}</div>
-          <p className="text-xs text-muted-foreground">Tickets awaiting assignment</p>
+          <div className="text-3xl font-black text-white">{openTickets}</div>
+          <p className="text-[10px] text-zinc-500 mt-1">Requerimientos por asignar</p>
         </CardContent>
       </Card>
-      <Card>
+
+      <Card className="glass-card border-none bg-yellow-500/5 hover:bg-yellow-500/10 transition-colors">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">In Progress</CardTitle>
-          <Ticket className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-xs font-bold uppercase tracking-wider text-yellow-500">En Curso</CardTitle>
+          <TicketIcon className="h-4 w-4 text-yellow-500" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{inProgressTickets}</div>
-          <p className="text-xs text-muted-foreground">Currently being worked on</p>
+          <div className="text-3xl font-black text-white">{inProgressTickets}</div>
+          <p className="text-[10px] text-zinc-500 mt-1">Siendo trabajados hoy</p>
         </CardContent>
       </Card>
-      <Card>
+
+      <Card className="glass-card border-none bg-emerald-500/5 hover:bg-emerald-500/10 transition-colors">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Resolved Tickets</CardTitle>
-          <CheckCircle className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-xs font-bold uppercase tracking-wider text-emerald-400">Completos</CardTitle>
+          <CheckCircle className="h-4 w-4 text-emerald-400" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{resolvedTickets}</div>
-          <p className="text-xs text-muted-foreground">In the last 30 days</p>
+          <div className="text-3xl font-black text-white">{resolvedTickets}</div>
+          <p className="text-[10px] text-zinc-500 mt-1">Resoluciones históricas totales</p>
         </CardContent>
       </Card>
-      <Card>
+
+      <Card className="glass-card border-none bg-red-500/5 hover:bg-red-500/10 transition-colors">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Avg. Resolution Time</CardTitle>
-          <Clock className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-xs font-bold uppercase tracking-wider text-red-500">Alertas SLA</CardTitle>
+          <AlertTriangle className="h-4 w-4 text-red-500 animate-pulse" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{avgResolutionTime}</div>
-          <p className="text-xs text-muted-foreground">In the last 30 days</p>
+          <div className="text-3xl font-black text-white">{criticalTickets}</div>
+          <p className="text-[10px] text-zinc-500 mt-1">Tickets fuera de tiempo legal</p>
         </CardContent>
       </Card>
     </div>

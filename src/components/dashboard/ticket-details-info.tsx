@@ -1,20 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Ticket, User, Note, TicketStatus } from "@/lib/definitions";
-import { tickets, users, notes as initialNotes } from "@/lib/data";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { format } from "date-fns";
 import { SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageSquare, Clock, UserIcon, AlertCircle, Play, CheckCircle2, XCircle, Send, UserCheck } from "lucide-react";
+import { MessageSquare, Clock, UserIcon, AlertCircle, Play, CheckCircle2, XCircle, Send, UserCheck, Loader2 } from "lucide-react";
 import { getSlaStatus } from "@/lib/sla-utils";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { sendTicketNotification } from "@/app/actions/notifications";
+import { createClient } from "@/lib/supabase/client";
 
 interface Props {
   ticketId: string;
@@ -36,95 +36,159 @@ const statusColorMap: Record<string, string> = {
 };
 
 export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
-  const initialTicket = tickets.find((t) => t.id === ticketId);
-
-  // States para Mockup de UI
-  const [ticketStatus, setTicketStatus] = useState<TicketStatus>(initialTicket?.status || 'Ingresado');
-  const [chatNotes, setChatNotes] = useState<Note[]>(initialNotes.filter((n) => n.ticketId === ticketId));
+  const supabase = createClient();
+  const [ticket, setTicket] = useState<Ticket | null>(null);
+  const [profiles, setProfiles] = useState<User[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [loading, setLoading] = useState(true);
   const [newMessage, setNewMessage] = useState("");
-  const [assigneeId, setAssigneeId] = useState(initialTicket?.assigneeId || "");
+  const [sending, setSending] = useState(false);
 
-  if (!initialTicket) return <div className="p-4 text-center">Ticket no encontrado</div>;
+  async function fetchData() {
+    try {
+        setLoading(true);
+        // 1. Ticket
+        const { data: ticketData } = await supabase.from('tickets').select('*').eq('id', ticketId).single();
+        if (ticketData) {
+            setTicket({
+                ...ticketData,
+                createdAt: new Date(ticketData.created_at),
+                updatedAt: new Date(ticketData.updated_at),
+                dueAt: new Date(ticketData.due_at),
+                resolvedAt: ticketData.resolved_at ? new Date(ticketData.resolved_at) : null,
+                submitterId: ticketData.submitter_id,
+                assigneeId: ticketData.assignee_id,
+            });
+        }
 
-  const submitter = users.find((u) => u.id === initialTicket.submitterId);
-  const assignee = users.find((u) => u.id === (assigneeId || initialTicket.assigneeId));
-  
-  // Fake calculation using the dynamic status instead of initial object
-  const simTicket = { ...initialTicket, status: ticketStatus };
-  const sla = getSlaStatus(simTicket);
+        // 2. Perfiles (Para saber nombres de autores y técnicos)
+        const { data: profilesData } = await supabase.from('profiles').select('*');
+        if (profilesData) setProfiles(profilesData as User[]);
 
-  const sendMessage = () => {
-    if (!newMessage.trim()) return;
-    const newNote: Note = {
-      id: `NOTE-NEW-${Date.now()}`,
-      ticketId: initialTicket!.id,
-      authorId: 'USR-2', // Simular que somos Técnico/Agente por default
-      content: newMessage,
-      createdAt: new Date(),
+        // 3. Notas
+        const { data: notesData } = await supabase
+            .from('notes')
+            .select('*')
+            .eq('ticket_id', ticketId)
+            .order('created_at', { ascending: true });
+        
+        if (notesData) {
+            setNotes(notesData.map(n => ({
+                ...n,
+                ticketId: n.ticket_id,
+                authorId: n.author_id,
+                createdAt: new Date(n.created_at),
+            })));
+        }
+    } catch (err) {
+        console.error("Error loading ticket details:", err);
+    } finally {
+        setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchData();
+  }, [ticketId]);
+
+  if (loading) {
+    return (
+        <div className="flex items-center justify-center p-20">
+            <Loader2 className="h-8 w-8 text-primary animate-spin" />
+        </div>
+    );
+  }
+
+  if (!ticket) return <div className="p-4 text-center">Ticket no encontrado</div>;
+
+  const submitter = profiles.find((u) => u.id === ticket.submitterId);
+  const assignee = profiles.find((u) => u.id === ticket.assigneeId);
+  const sla = getSlaStatus(ticket);
+
+  const sendMessage = async () => {
+    if (!newMessage.trim() || sending) return;
+    setSending(true);
+    try {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) return;
+
+        const { error } = await supabase.from('notes').insert({
+            ticket_id: ticketId,
+            author_id: userData.user.id,
+            content: newMessage,
+        });
+
+        if (!error) {
+            setNewMessage("");
+            fetchData();
+            if (onUpdate) onUpdate();
+            // Disparar email en background
+            sendTicketNotification(ticketId, "Nuevo mensaje en bitácora");
+        }
+    } finally {
+        setSending(false);
+    }
+  };
+
+  const handleReassign = async (newAssigneeId: string) => {
+    const { error } = await supabase
+        .from('tickets')
+        .update({ 
+            assignee_id: newAssigneeId,
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', ticketId);
+
+    if (!error) {
+        fetchData();
+        if (onUpdate) onUpdate();
+        const newTechName = profiles.find(u => u.id === newAssigneeId)?.name || "un nuevo técnico";
+        sendTicketNotification(ticketId, `🔄 Cambio de Responsable: Su requerimiento ha sido re-asignado a ${newTechName}.`);
+    }
+  };
+
+  const handleAction = async (newStatus: TicketStatus, autoMessage?: string) => {
+    const updateData: any = { 
+        status: newStatus,
+        updated_at: new Date().toISOString()
     };
-    initialNotes.push(newNote); // Guardar permanentemente en memoria mock
-    setChatNotes([...chatNotes, newNote]);
-    setNewMessage("");
-    if (onUpdate) onUpdate();
-    
-    // Disparar en background
-    sendTicketNotification(initialTicket!.id, "Nuevo mensaje en bitácora");
-  };
+    if (newStatus === "Terminado") updateData.resolved_at = new Date().toISOString();
 
-  const handleReassign = (newAssigneeId: string) => {
-    const globalTicket = tickets.find(t => t.id === initialTicket!.id);
-    if (globalTicket) {
-        globalTicket.assigneeId = newAssigneeId;
-        globalTicket.updatedAt = new Date();
+    const { error } = await supabase
+        .from('tickets')
+        .update(updateData)
+        .eq('id', ticketId);
+
+    if (!error) {
+        if (autoMessage) {
+            const { data: userData } = await supabase.auth.getUser();
+            await supabase.from('notes').insert({
+                ticket_id: ticketId,
+                author_id: userData.user?.id,
+                content: autoMessage,
+            });
+        }
+        fetchData();
+        if (onUpdate) onUpdate();
+        // Disparar email en background
+        sendTicketNotification(ticketId, autoMessage ? `Cambio de Estado: ${newStatus}` : `Estado actualizado a ${newStatus}`);
     }
-    setAssigneeId(newAssigneeId);
-    if (onUpdate) onUpdate();
-
-    const newTechName = users.find(u => u.id === newAssigneeId)?.name || "un nuevo técnico";
-    sendTicketNotification(initialTicket!.id, `🔄 Cambio de Responsable: Su requerimiento ha sido re-asignado a ${newTechName}.`);
-  };
-
-  const handleAction = (newStatus: TicketStatus, autoMessage?: string) => {
-    // Buscar y alterar directamente el objeto en memoria global
-    const globalTicket = tickets.find(t => t.id === initialTicket!.id);
-    if (globalTicket) {
-        globalTicket.status = newStatus;
-        globalTicket.updatedAt = new Date(); // Actualizamos el timestamp para congelar el reloj si es necesario
-        if (newStatus === "Terminado") globalTicket.resolvedAt = new Date();
-    }
-
-    setTicketStatus(newStatus);
-    if (autoMessage) {
-        const autoNote: Note = {
-            id: `NOTE-SYS-${Date.now()}`,
-            ticketId: initialTicket!.id,
-            authorId: 'USR-1', // Manager o admin
-            content: autoMessage,
-            createdAt: new Date(),
-        };
-        initialNotes.push(autoNote); // Guardar en memoria global
-        setChatNotes([...chatNotes, autoNote]);
-    }
-    if (onUpdate) onUpdate();
-
-    // Disparar en background
-    sendTicketNotification(initialTicket!.id, autoMessage ? `Cambio de Estado: ${newStatus}` : `Estado actualizado a ${newStatus}`);
   };
 
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)]">
       <SheetHeader className="mb-4 flex-none">
         <div className="flex items-center gap-2 mb-2">
-            <Badge variant="outline" className="text-xs bg-muted/30">#{initialTicket.id}</Badge>
-            <Badge variant="outline" className={`text-xs ${statusColorMap[ticketStatus]}`}>{ticketStatus}</Badge>
-            <Badge variant="outline" className={priorityColorMap[initialTicket.priority]}>{initialTicket.priority}</Badge>
+            <Badge variant="outline" className="text-xs bg-muted/30">#{ticket.id}</Badge>
+            <Badge variant="outline" className={`text-xs ${statusColorMap[ticket.status]}`}>{ticket.status}</Badge>
+            <Badge variant="outline" className={priorityColorMap[ticket.priority]}>{ticket.priority}</Badge>
             
             <div className={`flex items-center gap-1.5 ml-auto px-2 py-0.5 rounded-full bg-muted/20 border border-border/50`}>
                 <div title={sla.label} className={`h-2 w-2 rounded-full ${sla.color}`} />
                 <span className="text-[10px] uppercase font-bold tracking-wider">{sla.label}</span>
             </div>
         </div>
-        <SheetTitle className="text-xl font-bold leading-tight text-white">{initialTicket.subject}</SheetTitle>
+        <SheetTitle className="text-xl font-bold leading-tight text-white">{ticket.subject}</SheetTitle>
         <div className="flex flex-col gap-1 mt-3 p-3 bg-white/5 border border-white/10 rounded-lg">
             <div className="flex items-center gap-2 text-xs">
                 <span className="text-zinc-500 font-medium">Solicitante:</span>
@@ -138,11 +202,11 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
         <div className="flex items-center text-[10px] text-muted-foreground mt-3 gap-3 opacity-70">
             <div className="flex items-center gap-1">
                 <Clock className="w-3 h-3" />
-                <span>Registrado el {format(initialTicket.createdAt, "dd/MM/yyyy HH:mm")}</span>
+                <span>Registrado el {format(ticket.createdAt, "dd/MM/yyyy HH:mm")}</span>
             </div>
             <div className="flex items-center gap-1">
                 <AlertCircle className="w-3 h-3" />
-                <span>Módulo: {initialTicket.category}</span>
+                <span>Módulo: {ticket.category}</span>
             </div>
         </div>
       </SheetHeader>
@@ -151,19 +215,19 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
       <div className="mb-6 flex-none bg-gradient-to-r from-muted/20 to-muted/5 border border-white/10 rounded-xl p-4">
         <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Flujo de Trabajo Operativo</h4>
         <div className="flex flex-wrap gap-2">
-            {ticketStatus === 'Ingresado' && (
+            {ticket.status === 'Ingresado' && (
                 <Button onClick={() => handleAction('En proceso', '⚙️ Ticket marcado como "En Proceso" por el técnico. Comenzando a trabajar en la solución.')} size="sm" className="bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 border border-cyan-500/30">
                     <Play className="w-4 h-4 mr-2" /> Iniciar Trabajo (Agente)
                 </Button>
             )}
             
-            {ticketStatus === 'En proceso' && (
+            {ticket.status === 'En proceso' && (
                 <Button onClick={() => handleAction('Espera de aprobación', '⏳ Trabajo finalizado por el técnico. Enviado al cliente para revisión y control de calidad.')} size="sm" className="bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 border border-yellow-500/30">
                     <AlertCircle className="w-4 h-4 mr-2" /> Enviar a Revisión (Al Cliente)
                 </Button>
             )}
 
-            {ticketStatus === 'Espera de aprobación' && (
+            {ticket.status === 'Espera de aprobación' && (
                 <>
                     <Button onClick={() => handleAction('Terminado', '✅ Solución validada y aceptada por el cliente. Ticket cerrado exitosamente.')} size="sm" className="bg-green-500/20 text-green-400 hover:bg-green-500/30 border border-green-500/30">
                         <CheckCircle2 className="w-4 h-4 mr-2" /> Aprobar Solución
@@ -189,7 +253,7 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
                 </>
             )}
 
-            {ticketStatus === 'Terminado' && (
+            {ticket.status === 'Terminado' && (
                 <div className="text-sm font-medium text-green-400 flex items-center">
                     <CheckCircle2 className="w-4 h-4 mr-2" /> Este requerimiento ha finalizado exitosamente.
                 </div>
@@ -216,12 +280,12 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
             </div>
             <div className="pt-2 border-t border-blue-500/10">
                 <Label className="text-[10px] text-zinc-500 mb-1.5 block">Cambiar responsable del caso:</Label>
-                <Select value={assigneeId} onValueChange={handleReassign}>
+                <Select value={ticket.assigneeId || ""} onValueChange={handleReassign}>
                     <SelectTrigger className="h-8 bg-black/40 border-white/5 text-xs text-zinc-300">
                         <SelectValue placeholder="Seleccionar técnico..." />
                     </SelectTrigger>
                     <SelectContent className="bg-zinc-900 border-white/10">
-                        {users.filter(u => u.role === 'Agent' || u.role === 'Manager').map(u => (
+                        {profiles.filter(u => u.role === 'Agent' || u.role === 'Manager').map(u => (
                             <SelectItem key={u.id} value={u.id} className="text-xs focus:bg-blue-500/20 focus:text-blue-200">
                                 {u.name} ({u.empresa})
                             </SelectItem>
@@ -237,7 +301,7 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
         <div className="space-y-4 mb-6">
             <h3 className="text-sm font-semibold text-primary">Descripción General</h3>
             <p className="text-sm border-l-2 border-primary/50 pl-4 py-2 bg-muted/10 text-muted-foreground whitespace-pre-wrap">
-                {initialTicket.description}
+                {ticket.description}
             </p>
         </div>
 
@@ -247,16 +311,15 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
                 <MessageSquare className="h-4 w-4" /> Conversación Intercom
             </h3>
             
-            {chatNotes.length === 0 ? (
+            {notes.length === 0 ? (
                 <div className="text-sm text-center py-6 text-muted-foreground border border-dashed border-white/10 rounded-lg">
                     Sin respuestas en este ticket. ¡Inicia la conversación!
                 </div>
             ) : (
                 <div className="space-y-4">
-                    {chatNotes.map(n => {
-                        const autor = users.find(u => u.id === n.authorId);
-                        // Estilizar diferente si el autor es quien abrió el ticket (Cliente/Submitter) o es un Agente
-                        const esSubmitter = n.authorId === initialTicket.submitterId;
+                    {notes.map(n => {
+                        const autor = profiles.find(u => u.id === n.authorId);
+                        const esSubmitter = n.authorId === ticket.submitterId;
                         
                         return (
                             <div key={n.id} className={`flex gap-3 ${esSubmitter ? 'flex-row' : 'flex-row-reverse'}`}>
@@ -292,7 +355,7 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
       <div className="flex-none pt-4 border-t border-white/10 mt-auto">
         <div className="flex gap-2">
             <Textarea
-                placeholder={ticketStatus === 'Espera de aprobación' ? "Explica el motivo (Si rechazas) o agradece (Si apruebas)..." : "Responde al técnico o agrega detalles..."}
+                placeholder={ticket.status === 'Espera de aprobación' ? "Explica el motivo (Si rechazas) o agradece (Si apruebas)..." : "Responde al técnico o agrega detalles..."}
                 className="resize-none min-h-[60px] bg-black/20 border-white/10 text-sm py-3"
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
@@ -303,8 +366,8 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
                     }
                 }}
             />
-            <Button onClick={sendMessage} disabled={!newMessage.trim()} className="h-auto shrink-0 bg-primary/20 text-primary hover:bg-primary hover:text-white transition-colors">
-                <Send className="h-5 w-5" />
+            <Button onClick={sendMessage} disabled={!newMessage.trim() || sending} className="h-auto shrink-0 bg-primary/20 text-primary hover:bg-primary hover:text-white transition-colors">
+                {sending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
             </Button>
         </div>
       </div>

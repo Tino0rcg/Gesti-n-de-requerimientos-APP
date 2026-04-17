@@ -18,12 +18,13 @@ export const SERVICE_CATALOG = [
 ];
 
 export const users: User[] = [
-  { id: 'USR-1', name: 'Ramiro Contreras', email: 'rcontreras@vanguardia.cl', avatarUrl: '/avatars/1.png', role: 'Manager', empresa: 'Vanguardia SpA' },
-  { id: 'USR-2', name: 'Antonia Paz', email: 'apaz@vanguardia.cl', avatarUrl: '/avatars/2.png', role: 'Agent', empresa: 'Vanguardia SpA' },
-  { id: 'USR-3', name: 'Juan Manuel Soporte', email: 'jms@vanguardia.cl', avatarUrl: '/avatars/3.png', role: 'Agent', empresa: 'Vanguardia SpA' },
-  { id: 'USR-4', name: 'Claudio Garrido', email: 'cgarrido@alphacorp.cl', avatarUrl: '/avatars/4.png', role: 'User', empresa: 'TechNova Solutions' },
-  { id: 'USR-5', name: 'Jorge Ramírez', email: 'jramirez@vanguardia.cl', avatarUrl: '/avatars/5.png', role: 'Agent', empresa: 'Vanguardia SpA' },
-  { id: 'USR-6', name: 'Lucía Fernández', email: 'lfernandez@vanguardia.cl', avatarUrl: '/avatars/6.png', role: 'Agent', empresa: 'Vanguardia SpA' },
+  { id: 'USR-1', name: 'Ramiro Contreras', email: 'rcontreras@vanguardia.cl', avatarUrl: '/avatars/1.png', role: 'Manager', empresa: 'Vanguardia SpA', password: 'vanguardia2024' },
+  { id: 'USR-2', name: 'Antonia Paz', email: 'apaz@vanguardia.cl', avatarUrl: '/avatars/2.png', role: 'Agent', empresa: 'Vanguardia SpA', password: 'vanguardia2024' },
+  { id: 'USR-3', name: 'Juan Manuel Soporte', email: 'jms@vanguardia.cl', avatarUrl: '/avatars/3.png', role: 'Agent', empresa: 'Vanguardia SpA', password: 'vanguardia2024' },
+  { id: 'USR-4', name: 'Claudio Garrido', email: 'cgarrido@alphacorp.cl', avatarUrl: '/avatars/4.png', role: 'User', empresa: 'TechNova Solutions', password: 'alpha2024' },
+  { id: 'USR-5', name: 'Jorge Ramírez', email: 'jramirez@vanguardia.cl', avatarUrl: '/avatars/5.png', role: 'Agent', empresa: 'Vanguardia SpA', password: 'vanguardia2024' },
+  { id: 'USR-6', name: 'Lucía Fernández', email: 'lfernandez@vanguardia.cl', avatarUrl: '/avatars/6.png', role: 'Agent', empresa: 'Vanguardia SpA', password: 'vanguardia2024' },
+  { id: 'USR-7', name: 'Carlos TechNova', email: 'carlos@technova.com', avatarUrl: '/avatars/1.png', role: 'ClientAdmin', empresa: 'TechNova Solutions', password: 'tech2024' },
 ];
 
 export const tecnicos = [

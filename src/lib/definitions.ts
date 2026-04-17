@@ -3,8 +3,9 @@ export type User = {
     name: string;
     email: string;
     avatarUrl: string;
-    role: 'User' | 'Agent' | 'Manager';
+    role: 'User' | 'Agent' | 'Manager' | 'ClientAdmin';
     empresa: string;
+    password?: string;
   };
   
 export type TicketStatus = 'Ingresado' | 'En proceso' | 'Espera de aprobación' | 'Terminado';

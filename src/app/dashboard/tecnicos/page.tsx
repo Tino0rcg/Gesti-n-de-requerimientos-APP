@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { tecnicos as globalTecnicos } from "@/lib/data";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { User } from "@/lib/definitions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,7 +15,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function TecnicosPage() {
-    const [tecnicos, setTecnicos] = useState(globalTecnicos);
+    const supabase = createClient();
+    const [tecnicos, setTecnicos] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [isSheetOpen, setIsSheetOpen] = useState(false);
     
@@ -23,28 +26,47 @@ export default function TecnicosPage() {
         nombre: "",
         especialidad: "Soporte Nivel 1",
         estado: "Disponible",
+        password: "",
     });
 
-    const handleAñadirTecnico = (e: React.FormEvent) => {
-        e.preventDefault();
-        const newTecnico = {
-            id: `TEC-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
-            nombre: formData.nombre,
-            especialidad: formData.especialidad,
-            ticketsActivos: 0,
-            estado: formData.estado,
-            rating: 5.0, // rating base
+    useEffect(() => {
+        const loadTechs = async () => {
+            const { data } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('role', 'Agent');
+            if (data) setTecnicos(data);
+            setLoading(false);
         };
-        globalTecnicos.push(newTecnico);
-        setTecnicos([...globalTecnicos]);
-        setIsSheetOpen(false);
-        setFormData({ nombre: "", especialidad: "Soporte Nivel 1", estado: "Disponible" });
+        loadTechs();
+    }, []);
+
+    const handleAñadirTecnico = async (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        const { error } = await supabase.from('profiles').insert({
+            name: formData.nombre,
+            role: 'Agent',
+            specialty: formData.especialidad,
+            status: formData.estado,
+            rating: 5.0,
+            avatar_url: '/avatars/3.png'
+        });
+
+        if (!error) {
+            const { data } = await supabase.from('profiles').select('*').eq('role', 'Agent');
+            if (data) setTecnicos(data);
+            setIsSheetOpen(false);
+            setFormData({ nombre: "", especialidad: "Soporte Nivel 1", estado: "Disponible", password: "" });
+        }
     };
 
-    const filteredTecnicos = tecnicos.filter(t => 
-        t.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        t.especialidad.toLowerCase().includes(searchTerm.toLowerCase())
+    const filteredTecnicos = (tecnicos || []).filter(t => 
+        (t.name || "").toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (t.specialty || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    if (loading) return <div className="p-8 text-center text-zinc-500 italic">Cargando agentes especializados...</div>;
 
     return (
         <div className="flex flex-col gap-6">
@@ -97,38 +119,38 @@ export default function TecnicosPage() {
                                     <TableCell className="font-medium flex items-center gap-3">
                                         <Avatar className="h-8 w-8 border border-white/10">
                                             <AvatarFallback className="bg-blue-500/20 text-blue-400">
-                                                {tec.nombre.charAt(0)}
+                                                {(tec.name || "U").charAt(0)}
                                             </AvatarFallback>
                                         </Avatar>
                                         <div>
-                                            <p className="font-medium text-sm text-white leading-none">{tec.nombre}</p>
+                                            <p className="font-medium text-sm text-white leading-none">{tec.name}</p>
                                             <p className="text-xs text-muted-foreground mt-1">{tec.id}</p>
                                         </div>
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex items-center gap-2 text-muted-foreground">
                                             <Wrench className="h-3 w-3 "/>
-                                            <span>{tec.especialidad}</span>
+                                            <span>{tec.specialty || "General"}</span>
                                         </div>
                                     </TableCell>
                                     <TableCell>
-                                        <Badge variant="outline" className={tec.ticketsActivos > 3 ? "bg-orange-500/20 text-orange-400 border-orange-500/30" : "bg-zinc-800 text-zinc-300 border-zinc-700"}>
-                                            {tec.ticketsActivos} asignados
+                                        <Badge variant="outline" className="bg-zinc-800 text-zinc-300 border-zinc-700">
+                                            0 asignados
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex items-center gap-1.5 text-yellow-500">
                                             <Star className="h-4 w-4 fill-current" />
-                                            <span className="text-sm font-bold text-white">{Number(tec.rating).toFixed(1)}</span>
+                                            <span className="text-sm font-bold text-white">{Number(tec.rating || 5).toFixed(1)}</span>
                                         </div>
                                     </TableCell>
                                     <TableCell>
                                         <Badge variant="outline" className={
-                                            tec.estado === 'Disponible' ? 'bg-green-500/20 text-green-400 border-green-500/30' : 
-                                            tec.estado === 'En Terreno' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 
+                                            tec.status === 'Disponible' ? 'bg-green-500/20 text-green-400 border-green-500/30' : 
+                                            tec.status === 'En Terreno' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 
                                             'bg-red-500/20 text-red-400 border-red-500/30'
                                         }>
-                                            {tec.estado}
+                                            {tec.status || 'Disponible'}
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right">
@@ -158,6 +180,10 @@ export default function TecnicosPage() {
                             <div className="space-y-2">
                                 <Label>Nombre de Técnico</Label>
                                 <Input required placeholder="Ej: Luis Valenzuela" value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} className="bg-black/20" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Contraseña de Acceso</Label>
+                                <Input required type="password" placeholder="••••••••" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="bg-black/20" />
                             </div>
                             
                             <div className="space-y-2">

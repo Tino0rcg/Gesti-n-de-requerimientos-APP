@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { users as globalUsers, EMPRESAS_PERMITIDAS } from "@/lib/data";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { User } from "@/lib/definitions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +15,16 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function UsuariosPage() {
-    const [usuarios, setUsuarios] = useState<User[]>(globalUsers);
+    const supabase = createClient();
+    const [usuarios, setUsuarios] = useState<User[]>([]);
+    const [empresasPermitidas, setEmpresasPermitidas] = useState<string[]>([]);
+    const [loading, setLoading] = useState(true);
+    
+    // Simular el usuario autenticado para el prototipo (Cambiable para pruebas)
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const isGlobalAdmin = currentUser?.role === 'Manager';
+    const isClientAdmin = currentUser?.role === 'ClientAdmin';
+
     const [searchTerm, setSearchTerm] = useState("");
     const [isSheetOpen, setIsSheetOpen] = useState(false);
     
@@ -25,29 +34,72 @@ export default function UsuariosPage() {
         email: "",
         role: "User",
         empresa: "",
+        password: "",
     });
 
-    const handleAñadirUsuario = (e: React.FormEvent) => {
-        e.preventDefault();
-        const newUser: User = {
-            id: `USR-${Date.now()}`,
-            name: formData.name,
-            email: formData.email,
-            role: formData.role as any,
-            avatarUrl: '/avatars/3.png',
-            empresa: formData.empresa,
+    useEffect(() => {
+        const loadData = async () => {
+            const { data: profiles } = await supabase.from('profiles').select('*');
+            const { data: cos } = await supabase.from('companies').select('name');
+            
+            if (profiles) setUsuarios(profiles.map(u => ({ ...u, avatarUrl: u.avatar_url || '/avatars/3.png' })));
+            if (cos) setEmpresasPermitidas(cos.map(c => c.name));
+            if (profiles && profiles.length > 0) setCurrentUser(profiles[0]); // Por ahora primer usuario como sesión
+            setLoading(false);
         };
-        // Persistir en el simulador global
-        globalUsers.push(newUser);
-        setUsuarios([...globalUsers]);
-        setIsSheetOpen(false);
-        setFormData({ name: "", email: "", role: "User", empresa: "" });
+        loadData();
+    }, []);
+
+    // Sincronizar empresa si cambia el usuario simulado
+    const handleSimulatedUserChange = (userId: string) => {
+        const user = usuarios.find(u => u.id === userId);
+        if (user) {
+            setCurrentUser(user);
+            setFormData(prev => ({
+                ...prev,
+                empresa: user.role === 'ClientAdmin' ? user.empresa : ""
+            }));
+        }
     };
 
-    const filteredUsers = usuarios.filter(u => 
-        u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        u.email.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const handleAñadirUsuario = async (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        // Aquí iría la lógica de Auth + Profile en un caso real. 
+        // Para este prototipo, insertamos directo en la tabla profiles.
+        const { error } = await supabase.from('profiles').insert({
+            name: formData.name,
+            email: formData.email,
+            role: formData.role,
+            company_id: (await supabase.from('companies').select('id').eq('name', formData.empresa).single()).data?.id,
+            avatar_url: '/avatars/3.png'
+        });
+
+        if (!error) {
+            const { data: profiles } = await supabase.from('profiles').select('*');
+            if (profiles) setUsuarios(profiles.map(u => ({ ...u, avatarUrl: u.avatar_url || '/avatars/3.png' })));
+            setIsSheetOpen(false);
+            setFormData({ 
+                name: "", 
+                email: "", 
+                role: "User", 
+                empresa: (isClientAdmin && currentUser) ? currentUser.empresa : "", 
+                password: "" 
+            });
+        }
+    };
+
+    const filteredUsers = (usuarios || []).filter(u => {
+        const matchesSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                             u.email.toLowerCase().includes(searchTerm.toLowerCase());
+        
+        if (isClientAdmin && currentUser) {
+            return matchesSearch && u.empresa === currentUser.empresa;
+        }
+        return matchesSearch;
+    });
+
+    if (loading) return <div className="p-8 text-center text-zinc-500 italic">Conectando a base de datos real...</div>;
 
     return (
         <div className="flex flex-col gap-6">
@@ -58,10 +110,27 @@ export default function UsuariosPage() {
                         Control de acceso y roles para las diferentes cuentas.
                     </p>
                 </div>
-                <Button onClick={() => setIsSheetOpen(true)} className="gap-2">
-                    <PlusCircle className="h-4 w-4" />
-                    Nuevo Usuario
-                </Button>
+                <div className="flex items-center gap-4">
+                    <div className="flex flex-col items-end mr-4 p-2 bg-primary/5 border border-primary/10 rounded-lg">
+                        <Label className="text-[10px] text-zinc-500 mb-1">Simular Vista Como:</Label>
+                        <Select value={currentUser.id} onValueChange={handleSimulatedUserChange}>
+                            <SelectTrigger className="h-7 w-[200px] bg-transparent border-none text-xs text-primary font-bold">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                {usuarios.filter(u => u.role === 'Manager' || u.role === 'ClientAdmin').map(u => (
+                                    <SelectItem key={u.id} value={u.id} className="text-xs">
+                                        {u.name} ({u.role})
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <Button onClick={() => setIsSheetOpen(true)} className="gap-2">
+                        <PlusCircle className="h-4 w-4" />
+                        Nuevo Usuario
+                    </Button>
+                </div>
             </div>
 
             <Card className="glass-card border-none">
@@ -148,17 +217,27 @@ export default function UsuariosPage() {
                                 <Input required type="email" placeholder="ejemplo@empresa.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="bg-black/20" />
                             </div>
                             <div className="space-y-2">
+                                <Label>Contraseña de Acceso</Label>
+                                <Input required type="password" placeholder="••••••••" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="bg-black/20" />
+                            </div>
+                            <div className="space-y-2">
                                 <Label>Empresa Perteneciente</Label>
-                                <Select required value={formData.empresa} onValueChange={(v) => setFormData({...formData, empresa: v})}>
-                                    <SelectTrigger className="bg-black/20">
-                                        <SelectValue placeholder="Debe pertenecer a una empresa" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {EMPRESAS_PERMITIDAS.map(emp => (
-                                            <SelectItem key={emp} value={emp}>{emp}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                {isClientAdmin ? (
+                                    <div className="p-3 bg-white/5 border border-white/10 rounded-md text-sm text-zinc-400 font-medium">
+                                        Empresa bloqueada: <span className="text-primary">{currentUser.empresa}</span>
+                                    </div>
+                                ) : (
+                                    <Select required value={formData.empresa} onValueChange={(v) => setFormData({...formData, empresa: v})}>
+                                        <SelectTrigger className="bg-black/20 text-white border-white/10">
+                                            <SelectValue placeholder="Seleccionar empresa..." />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                            {empresasPermitidas.map(emp => (
+                                                <SelectItem key={emp} value={emp}>{emp}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                )}
                             </div>
                             <div className="space-y-2">
                                 <Label>Nivel de Permisos</Label>
@@ -166,10 +245,11 @@ export default function UsuariosPage() {
                                     <SelectTrigger className="bg-black/20">
                                         <SelectValue placeholder="Selecciona un rol" />
                                     </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="User">Cliente Externo</SelectItem>
-                                        <SelectItem value="Agent">Técnico / Soporte</SelectItem>
-                                        <SelectItem value="Manager">Administrador Global</SelectItem>
+                                    <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                                        <SelectItem value="User">Cliente Externo (Usuario)</SelectItem>
+                                        <SelectItem value="ClientAdmin">Administrador de Empresa (Cliente)</SelectItem>
+                                        <SelectItem value="Agent">Técnico / Soporte (Agente)</SelectItem>
+                                        <SelectItem value="Manager">Administrador Global (Mesa Ayuda)</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>

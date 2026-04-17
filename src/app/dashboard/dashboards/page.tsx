@@ -1,47 +1,45 @@
-import { LineChart, BarChart, PieChart } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AnalyticsCharts } from "@/components/dashboard/analytics-charts";
+import { StatCards } from "@/components/dashboard/stat-cards";
+import { ShieldCheck, BarChart3, TrendingUp } from "lucide-react";
+import { getTickets, getUsers } from "@/lib/data-server";
 
-export default function DashboardsPage() {
+export default async function DashboardsPage() {
+    const tickets = await getTickets();
+    const allUsers = await getUsers();
+
     return (
-        <div className="flex flex-col gap-4">
-            <h1 className="text-2xl font-bold">Paneles de Control (Dashboards)</h1>
-            <p className="text-muted-foreground">
-                Visualiza las métricas clave del sistema.
-            </p>
-            
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mt-4">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Dashboard 1</CardTitle>
-                        <LineChart className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">Resumen General</div>
-                        <p className="text-xs text-muted-foreground mt-1">Estadísticas por definir</p>
-                    </CardContent>
-                </Card>
-                
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Dashboard 2</CardTitle>
-                        <PieChart className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">Métricas de Clientes</div>
-                        <p className="text-xs text-muted-foreground mt-1">Estadísticas por definir</p>
-                    </CardContent>
-                </Card>
+        <div className="flex flex-col gap-8">
+            <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-widest">
+                    <ShieldCheck className="h-4 w-4" />
+                    Módulo de Inteligencia Operativa
+                </div>
+                <h1 className="text-4xl font-black tracking-tighter text-white italic uppercase">Control de Métricas ANS</h1>
+                <p className="text-muted-foreground text-sm max-w-2xl mt-1">
+                    Monitoreo en tiempo real de Acuerdos de Nivel de Servicio, rendimiento técnico y demanda por organización.
+                </p>
+            </div>
 
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Dashboard 3</CardTitle>
-                        <BarChart className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">Rendimiento de Técnicos</div>
-                        <p className="text-xs text-muted-foreground mt-1">Estadísticas por definir</p>
-                    </CardContent>
-                </Card>
+            <StatCards tickets={tickets} />
+
+            <div className="grid gap-4 mt-4">
+                <div className="flex items-center gap-2 mb-2">
+                    <BarChart3 className="h-5 w-5 text-primary" />
+                    <h2 className="text-xl font-bold text-white uppercase tracking-tight">Visualizaciones Analíticas</h2>
+                </div>
+                <AnalyticsCharts tickets={tickets} allUsers={allUsers} />
+            </div>
+
+            <div className="bg-primary/5 border border-primary/20 rounded-xl p-6 mt-4">
+                <div className="flex items-center gap-3 text-primary mb-4">
+                    <TrendingUp className="h-6 w-6" />
+                    <h3 className="text-lg font-bold">Resumen de Eficiencia Proyectada</h3>
+                </div>
+                <p className="text-zinc-400 text-sm leading-relaxed">
+                    Basado en los datos actuales, el tiempo promedio de resolución se mantiene en un rango óptimo. 
+                    Se recomienda poner especial atención a las categorías con mayor demanda para evitar cuellos de botella 
+                    en los técnicos con alta carga de tickets activos.
+                </p>
             </div>
         </div>
     );
