@@ -93,8 +93,13 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
 
   if (loading) {
     return (
-        <div className="flex items-center justify-center p-20">
-            <Loader2 className="h-8 w-8 text-primary animate-spin" />
+        <div className="flex flex-col h-full">
+            <SheetHeader className="mb-4 flex-none">
+                <SheetTitle className="text-xl font-bold leading-tight text-white/50 animate-pulse">Cargando requerimiento...</SheetTitle>
+            </SheetHeader>
+            <div className="flex-1 flex items-center justify-center">
+                <Loader2 className="h-8 w-8 text-primary animate-spin" />
+            </div>
         </div>
     );
   }

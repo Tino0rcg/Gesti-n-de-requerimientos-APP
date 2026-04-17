@@ -1,20 +1,17 @@
 "use client";
 
-import { tickets } from "@/lib/data";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { TicketPriority, TicketStatus } from "@/lib/definitions";
+import { Ticket, User, TicketPriority, TicketStatus } from "@/lib/definitions";
 import { format } from "date-fns";
-import { Clock, AlertCircle } from "lucide-react";
+import { Clock, AlertCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { TicketDetailsInfo } from "@/components/dashboard/ticket-details-info";
 import { getSlaStatus } from "@/lib/sla-utils";
-import { useState } from "react";
-import { users } from "@/lib/data";
-
-const getSubmitter = (id: string) => users.find(u => u.id === id);
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 const COLUMNS: TicketStatus[] = ['Ingresado', 'En proceso', 'Espera de aprobación', 'Terminado'];
 
@@ -26,10 +23,44 @@ const priorityColorMap: { [key in TicketPriority]: string } = {
 };
 
 export default function KanbanTicketsPage() {
-    // Simulando que extraemos los tickets de BD
-    const activeTickets = tickets.filter(t => t.status !== 'Terminado' || true); // Mostramos todos para visualización
+    const supabase = createClient();
+    const [tickets, setTickets] = useState<Ticket[]>([]);
+    const [profiles, setProfiles] = useState<User[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
-    const [, setRefreshCount] = useState(0);
+    const [loading, setLoading] = useState(true);
+    const [refreshCount, setRefreshCount] = useState(0);
+
+    const fetchData = async () => {
+        try {
+            setLoading(true);
+            // 1. Fetch Tickets
+            const { data: ticketsData } = await supabase.from('tickets').select('*');
+            if (ticketsData) {
+                setTickets(ticketsData.map(t => ({
+                    ...t,
+                    createdAt: new Date(t.created_at),
+                    updatedAt: new Date(t.updated_at),
+                    dueAt: new Date(t.due_at),
+                    resolvedAt: t.resolved_at ? new Date(t.resolved_at) : null,
+                    submitterId: t.submitter_id,
+                    assigneeId: t.assignee_id,
+                })));
+            }
+            // 2. Fetch Profiles (for names in cards)
+            const { data: profilesData } = await supabase.from('profiles').select('*');
+            if (profilesData) setProfiles(profilesData as User[]);
+        } catch (err) {
+            console.error("Error fetching Kanban data:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, [refreshCount]);
+
+    const getSubmitter = (id: string) => profiles.find(u => u.id === id);
 
     return (
         <div className="flex flex-col gap-6 h-full pb-4">
@@ -40,11 +71,14 @@ export default function KanbanTicketsPage() {
                         Visualiza y mueve los tickets según su estado operativo actual.
                     </p>
                 </div>
-                <Button asChild variant="outline">
-                    <Link href="/dashboard/tickets/historial">
-                        Ver Historial (Buscador)
-                    </Link>
-                </Button>
+                <div className="flex items-center gap-2">
+                    {loading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+                    <Button asChild variant="outline">
+                        <Link href="/dashboard/tickets/historial">
+                            Ver Historial (Buscador)
+                        </Link>
+                    </Button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 h-full">
@@ -81,8 +115,8 @@ export default function KanbanTicketsPage() {
                                             {ticket.subject}
                                         </CardTitle>
                                         <div className="flex flex-col pt-1">
-                                            <span className="text-[11px] text-white font-medium">{getSubmitter(ticket.submitterId)?.name}</span>
-                                            <span className="text-[9px] text-primary uppercase font-bold tracking-wider">{getSubmitter(ticket.submitterId)?.empresa}</span>
+                                            <span className="text-[11px] text-white font-medium">{getSubmitter(ticket.submitterId)?.name || 'Desconocido'}</span>
+                                            <span className="text-[9px] text-primary uppercase font-bold tracking-wider">{getSubmitter(ticket.submitterId)?.empresa || 'Empresa externa'}</span>
                                         </div>
                                     </CardHeader>
                                     <CardContent className="p-4 pt-0">
@@ -102,7 +136,7 @@ export default function KanbanTicketsPage() {
                                     </CardContent>
                                 </Card>
                             ))}
-                            {tickets.filter(t => t.status === columnStatus).length === 0 && (
+                            {!loading && tickets.filter(t => t.status === columnStatus).length === 0 && (
                                 <div className="flex-1 flex items-center justify-center border-2 border-dashed border-border/50 rounded-lg p-6">
                                     <span className="text-sm text-muted-foreground">Sin requerimientos</span>
                                 </div>

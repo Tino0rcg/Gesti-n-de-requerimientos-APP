@@ -111,21 +111,23 @@ export default function UsuariosPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-4">
-                    <div className="flex flex-col items-end mr-4 p-2 bg-primary/5 border border-primary/10 rounded-lg">
-                        <Label className="text-[10px] text-zinc-500 mb-1">Simular Vista Como:</Label>
-                        <Select value={currentUser.id} onValueChange={handleSimulatedUserChange}>
-                            <SelectTrigger className="h-7 w-[200px] bg-transparent border-none text-xs text-primary font-bold">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                {usuarios.filter(u => u.role === 'Manager' || u.role === 'ClientAdmin').map(u => (
-                                    <SelectItem key={u.id} value={u.id} className="text-xs">
-                                        {u.name} ({u.role})
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                    {currentUser && (
+                        <div className="flex flex-col items-end mr-4 p-2 bg-primary/5 border border-primary/10 rounded-lg">
+                            <Label className="text-[10px] text-zinc-500 mb-1">Simular Vista Como:</Label>
+                            <Select value={currentUser.id} onValueChange={handleSimulatedUserChange}>
+                                <SelectTrigger className="h-7 w-[200px] bg-transparent border-none text-xs text-primary font-bold">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                    {usuarios.filter(u => u.role === 'Manager' || u.role === 'ClientAdmin').map(u => (
+                                        <SelectItem key={u.id} value={u.id} className="text-xs">
+                                            {u.name} ({u.role})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
                     <Button onClick={() => setIsSheetOpen(true)} className="gap-2">
                         <PlusCircle className="h-4 w-4" />
                         Nuevo Usuario
@@ -224,7 +226,7 @@ export default function UsuariosPage() {
                                 <Label>Empresa Perteneciente</Label>
                                 {isClientAdmin ? (
                                     <div className="p-3 bg-white/5 border border-white/10 rounded-md text-sm text-zinc-400 font-medium">
-                                        Empresa bloqueada: <span className="text-primary">{currentUser.empresa}</span>
+                                        Empresa bloqueada: <span className="text-primary">{currentUser?.empresa || "Sin Empresa"}</span>
                                     </div>
                                 ) : (
                                     <Select required value={formData.empresa} onValueChange={(v) => setFormData({...formData, empresa: v})}>
