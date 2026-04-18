@@ -30,7 +30,7 @@ export function AnalyticsCharts({ tickets, allUsers }: { tickets: Ticket[], allU
    .sort((a, b) => b.value - a.value);
 
   // 2. Desempeño Técnico vs SLA por Servicio
-  const tecnicos = (allUsers || []).filter(u => u.role === 'Agent');
+  const tecnicos = (allUsers || []).filter(u => u.role === 'Técnico');
   const techServiceSla = tecnicos.map(tec => {
     const techTickets = (tickets || []).filter(t => t.assigneeId === tec.id);
     const data: any = { name: tec.name.split(' ')[0] };

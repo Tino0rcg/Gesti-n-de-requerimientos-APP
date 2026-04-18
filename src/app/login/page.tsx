@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useState } from "react";
 import { login } from "./actions";
 import Image from "next/image";
-import { ShieldCheck, ArrowLeft, Loader2 } from "lucide-react";
+import { ShieldCheck, ArrowLeft, Loader2, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 
 function errorToSpanish(message: string): string {
@@ -28,6 +28,7 @@ export default function LoginPage() {
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -100,15 +101,28 @@ export default function LoginPage() {
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="password" title="Contraseña" className="text-zinc-400 text-xs font-bold uppercase tracking-widest ml-1">Contraseña</Label>
-                            <Input 
-                                id="password" 
-                                type="password" 
-                                required 
-                                placeholder="••••••••"
-                                className="bg-black/40 border-white/10 text-white h-11 focus:border-primary/50 transition-all rounded-xl"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                            />
+                            <div className="relative group">
+                                <Input 
+                                    id="password" 
+                                    type={showPassword ? "text" : "password"} 
+                                    required 
+                                    placeholder="••••••••"
+                                    className="bg-black/40 border-white/10 text-white h-11 focus:border-primary/50 transition-all rounded-xl pr-10"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors"
+                                >
+                                    {showPassword ? (
+                                        <EyeOff className="h-4 w-4" />
+                                    ) : (
+                                        <Eye className="h-4 w-4" />
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </CardContent>
                     <CardFooter className="pt-2 pb-8">

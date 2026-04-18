@@ -3,7 +3,7 @@ export type User = {
     name: string;
     email: string;
     avatarUrl: string;
-    role: 'User' | 'Agent' | 'Manager' | 'ClientAdmin';
+    role: 'Usuario' | 'Técnico' | 'Administrador Full' | 'Administrador Cliente';
     empresa: string;
     password?: string;
   };

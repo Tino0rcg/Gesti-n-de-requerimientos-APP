@@ -2,11 +2,25 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
+import { 
+    createCompanyAction, 
+    getCompaniesAction, 
+    updateCompanyAction, 
+    deleteCompanyAction 
+} from "@/app/actions/companies";
+import { useToast } from "@/hooks/use-toast";
 import { 
     Building2, 
     MoreHorizontal, 
     PlusCircle, 
-    Search 
+    Search,
+    Pencil,
+    Trash2,
+    Eye,
+    Globe,
+    Calendar,
+    Shield
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,13 +30,40 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Separator } from "@/components/ui/separator";
 
 export default function ClientesPage() {
     const supabase = createClient();
+    const router = useRouter();
+    const { toast } = useToast();
+    const [userRole, setUserRole] = useState<string | null>(null);
     const [empresas, setEmpresas] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [isSheetOpen, setIsSheetOpen] = useState(false);
+    const [isViewSheetOpen, setIsViewSheetOpen] = useState(false);
+    const [editingCompany, setEditingCompany] = useState<any | null>(null);
+    const [viewingCompany, setViewingCompany] = useState<any | null>(null);
+    const [companyToDelete, setCompanyToDelete] = useState<any | null>(null);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -33,29 +74,124 @@ export default function ClientesPage() {
     });
 
     useEffect(() => {
-        const loadCompanies = async () => {
-            const { data } = await supabase.from('companies').select('*');
-            if (data) setEmpresas(data);
-            setLoading(false);
+        const checkRole = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                router.push("/login");
+                return;
+            }
+
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', user.id)
+                .single();
+
+            if (profile?.role?.trim() !== 'Administrador Full') {
+                toast({ 
+                    title: "Acceso denegado", 
+                    description: "No tienes permisos para gestionar empresas.", 
+                    variant: "destructive" 
+                });
+                router.push("/dashboard");
+                return;
+            }
+            setUserRole(profile.role);
+            loadCompanies();
         };
-        loadCompanies();
+        checkRole();
     }, []);
 
-    const handleNuevaEmpresa = async (e: React.FormEvent) => {
-        e.preventDefault();
-        
-        const { error } = await supabase.from('companies').insert({
-            name: formData.nombre,
-            rut: formData.rut,
-            plan: formData.plan,
-            status: formData.status
-        });
+    const loadCompanies = async () => {
+        setLoading(true);
+        const result = await getCompaniesAction();
+        if (result.success && result.data) {
+            setEmpresas(result.data);
+        }
+        setLoading(false);
+    };
 
-        if (!error) {
-            const { data } = await supabase.from('companies').select('*');
-            if (data) setEmpresas(data);
-            setIsSheetOpen(false);
-            setFormData({ nombre: "", rut: "", plan: "Pro", status: "Activo" });
+    const handleOpenCreate = () => {
+        setEditingCompany(null);
+        setFormData({ nombre: "", rut: "", plan: "Pro", status: "Activo" });
+        setIsSheetOpen(true);
+    };
+
+    const handleOpenEdit = (company: any) => {
+        setEditingCompany(company);
+        setFormData({
+            nombre: company.name,
+            rut: company.rut,
+            plan: company.plan,
+            status: company.status,
+        });
+        setIsSheetOpen(true);
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        
+        try {
+            let result;
+            if (editingCompany) {
+                result = await updateCompanyAction(editingCompany.id, {
+                    name: formData.nombre,
+                    rut: formData.rut,
+                    plan: formData.plan,
+                    status: formData.status
+                });
+            } else {
+                result = await createCompanyAction({
+                    name: formData.nombre,
+                    rut: formData.rut,
+                    plan: formData.plan,
+                    status: formData.status
+                });
+            }
+
+            if (!result.success) {
+                toast({
+                    title: "Error",
+                    description: result.error || "Ocurrió un problema con la operación.",
+                    variant: "destructive",
+                });
+            } else {
+                toast({
+                    title: editingCompany ? "Empresa actualizada" : "Empresa habilitada",
+                    description: editingCompany ? "Los cambios han sido guardados." : "La organización ha sido registrada exitosamente.",
+                });
+                
+                await loadCompanies();
+                setIsSheetOpen(false);
+            }
+        } catch (err: any) {
+             toast({
+                 title: "Error crítico",
+                 description: "Ocurrió un error en el servidor.",
+                 variant: "destructive",
+             });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!companyToDelete) return;
+        setIsSubmitting(true);
+        try {
+            const result = await deleteCompanyAction(companyToDelete.id);
+            if (result.success) {
+                toast({ title: "Empresa eliminada", description: "El registro ha sido borrado físicamente." });
+                await loadCompanies();
+            } else {
+                toast({ title: "Error al borrar", description: result.error, variant: "destructive" });
+            }
+        } catch (error) {
+            toast({ title: "Error", description: "No se pudo completar la operación.", variant: "destructive" });
+        } finally {
+            setIsSubmitting(false);
+            setCompanyToDelete(null);
         }
     };
 
@@ -64,7 +200,7 @@ export default function ClientesPage() {
         (emp.rut || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    if (loading) return <div className="p-8 text-center text-zinc-500 italic">Conectando con el registro corporativo...</div>;
+    if (loading || !userRole) return <div className="p-8 text-center text-zinc-500 italic">Verificando credenciales corporativas...</div>;
 
     return (
         <div className="flex flex-col gap-6">
@@ -75,7 +211,7 @@ export default function ClientesPage() {
                         Gestiona las organizaciones y sus privilegios de acceso.
                     </p>
                 </div>
-                <Button onClick={() => setIsSheetOpen(true)} className="gap-2 bg-primary hover:bg-primary/90">
+                <Button onClick={handleOpenCreate} className="gap-2 bg-primary hover:bg-primary/90">
                     <PlusCircle className="h-4 w-4" />
                     Nueva Empresa
                 </Button>
@@ -135,9 +271,45 @@ export default function ClientesPage() {
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        <Button variant="ghost" size="icon" className="hover:bg-white/10">
-                                            <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
-                                        </Button>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="hover:bg-white/10">
+                                                    <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" className="bg-zinc-900 border-white/10 text-white">
+                                                <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                                <DropdownMenuSeparator className="bg-white/5" />
+                                                <DropdownMenuItem 
+                                                    className="gap-2 cursor-pointer" 
+                                                    onSelect={(e) => {
+                                                        e.preventDefault();
+                                                        setViewingCompany(empresa);
+                                                        setIsViewSheetOpen(true);
+                                                    }}
+                                                >
+                                                    <Eye className="h-4 w-4" /> Ver Perfil
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem 
+                                                    className="gap-2 cursor-pointer" 
+                                                    onSelect={(e) => {
+                                                        e.preventDefault();
+                                                        handleOpenEdit(empresa);
+                                                    }}
+                                                >
+                                                    <Pencil className="h-4 w-4" /> Editar
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem 
+                                                    className="gap-2 cursor-pointer text-red-400 focus:text-red-400 focus:bg-red-400/10" 
+                                                    onSelect={(e) => {
+                                                        e.preventDefault();
+                                                        setCompanyToDelete(empresa);
+                                                    }}
+                                                >
+                                                    <Trash2 className="h-4 w-4" /> Eliminar
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -147,16 +319,16 @@ export default function ClientesPage() {
             </Card>
 
             <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-                <SheetContent className="glass-panel border-l-primary/20">
+                <SheetContent className="glass-panel border-l-primary/20 flex flex-col sm:max-w-md w-full">
                     <SheetHeader>
-                        <SheetTitle>Registrar Empresa</SheetTitle>
+                        <SheetTitle>{editingCompany ? "Editar Empresa" : "Registrar Empresa"}</SheetTitle>
                         <SheetDescription>
-                            Al registrar una empresa, se habilita automáticamente el acceso para sus colaboradores.
+                            {editingCompany ? "Modifica los datos de la organización." : "Al registrar una empresa, se habilita automáticamente el acceso para sus colaboradores."}
                         </SheetDescription>
                     </SheetHeader>
                     
-                    <form onSubmit={handleNuevaEmpresa} className="flex flex-col gap-6 mt-6 h-full">
-                        <div className="space-y-4 flex-1">
+                    <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden mt-6">
+                        <div className="space-y-4 flex-1 overflow-y-auto pr-4 custom-scrollbar pb-6">
                             <div className="space-y-2">
                                 <Label>Nombre de la Organización</Label>
                                 <Input 
@@ -185,7 +357,7 @@ export default function ClientesPage() {
                                     <SelectTrigger className="bg-black/20 border-white/10">
                                         <SelectValue placeholder="Seleccionar plan..." />
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
                                         <SelectItem value="Básico">Plan Básico</SelectItem>
                                         <SelectItem value="Pro">Plan Pro (Estándar)</SelectItem>
                                         <SelectItem value="Premium">Plan Premium (Full SLA)</SelectItem>
@@ -195,12 +367,12 @@ export default function ClientesPage() {
                             </div>
 
                             <div className="space-y-2">
-                                <Label>Estado Inicial</Label>
-                                <Select value={formData.estado} onValueChange={(v) => setFormData({...formData, estado: v})}>
+                                <Label>Estado</Label>
+                                <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v})}>
                                     <SelectTrigger className="bg-black/20 border-white/10">
                                         <SelectValue placeholder="Estado..." />
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
                                         <SelectItem value="Activo">Activo (Habilitado)</SelectItem>
                                         <SelectItem value="Inactivo">Inactivo (Suspendido)</SelectItem>
                                     </SelectContent>
@@ -208,13 +380,126 @@ export default function ClientesPage() {
                             </div>
                         </div>
 
-                        <SheetFooter className="pb-8">
-                            <Button type="button" variant="ghost" onClick={() => setIsSheetOpen(false)}>Cancelar</Button>
-                            <Button type="submit" className="bg-primary hover:bg-primary/90">Habilitar Empresa</Button>
+                        <SheetFooter className="mt-auto pt-6 pb-2 border-t border-white/10">
+                            <Button type="button" variant="ghost" onClick={() => setIsSheetOpen(false)} disabled={isSubmitting}>Cancelar</Button>
+                            <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isSubmitting}>
+                                {isSubmitting ? "Procesando..." : (editingCompany ? "Guardar Cambios" : "Habilitar Empresa")}
+                            </Button>
                         </SheetFooter>
                     </form>
                 </SheetContent>
             </Sheet>
+
+            <Sheet open={isViewSheetOpen} onOpenChange={setIsViewSheetOpen}>
+                <SheetContent className="glass-panel border-l-primary/20 flex flex-col sm:max-w-md w-full">
+                    <SheetHeader>
+                        <SheetTitle className="flex items-center gap-2">
+                            <Building2 className="h-5 w-5 text-primary" />
+                            Detalles de la Empresa
+                        </SheetTitle>
+                        <SheetDescription>
+                            Vista de solo lectura del perfil corporativo.
+                        </SheetDescription>
+                    </SheetHeader>
+
+                    {viewingCompany && (
+                        <div className="mt-8 space-y-6 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                            <div className="flex flex-col items-center justify-center p-6 bg-white/5 rounded-xl border border-white/10 mb-6">
+                                <div className="p-4 bg-primary/10 rounded-full border border-primary/20 mb-3">
+                                    <Building2 className="h-10 w-10 text-primary" />
+                                </div>
+                                <h3 className="text-xl font-bold text-white">{viewingCompany.name}</h3>
+                                <Badge className="mt-2 bg-primary/20 text-primary border-primary/30 uppercase text-[10px] tracking-widest font-bold">
+                                    Organización Verificada
+                                </Badge>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-4">
+                                <div className="p-4 bg-white/5 rounded-lg border border-white/5 space-y-1">
+                                    <div className="flex items-center gap-2 text-zinc-500 text-xs font-semibold uppercase tracking-wider">
+                                        <Globe className="h-3 w-3" /> Identificador Fiscal (RUT)
+                                    </div>
+                                    <p className="text-white font-mono">{viewingCompany.rut}</p>
+                                </div>
+
+                                <div className="p-4 bg-white/5 rounded-lg border border-white/5 space-y-1">
+                                    <div className="flex items-center gap-2 text-zinc-500 text-xs font-semibold uppercase tracking-wider">
+                                        <Shield className="h-3 w-3" /> Nivel de Suscripción
+                                    </div>
+                                    <Badge variant="outline" className="mt-1 bg-white/5 border-white/10 text-zinc-300">
+                                        Plan {viewingCompany.plan}
+                                    </Badge>
+                                </div>
+
+                                <div className="p-4 bg-white/5 rounded-lg border border-white/5 space-y-1">
+                                    <div className="flex items-center gap-2 text-zinc-500 text-xs font-semibold uppercase tracking-wider">
+                                        <Globe className="h-3 w-3" /> Estado del Servicio
+                                    </div>
+                                    <Badge variant="outline" className={viewingCompany.status === 'Activo' ? 'bg-green-500/10 text-green-400 border-green-500/20' : ''}>
+                                        {viewingCompany.status}
+                                    </Badge>
+                                </div>
+
+                                <div className="p-4 bg-white/5 rounded-lg border border-white/5 space-y-1">
+                                    <div className="flex items-center gap-2 text-zinc-500 text-xs font-semibold uppercase tracking-wider">
+                                        <Calendar className="h-3 w-3" /> Registrada el
+                                    </div>
+                                    <p className="text-white text-sm">
+                                        {new Date(viewingCompany.created_at).toLocaleDateString('es-CL', { 
+                                            day: '2-digit', 
+                                            month: 'long', 
+                                            year: 'numeric' 
+                                        })}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <Separator className="bg-white/5 my-6" />
+
+                            <div className="space-y-4">
+                                <h4 className="text-sm font-semibold text-zinc-400 uppercase tracking-widest">Información Adicional</h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="text-center p-3 bg-white/5 rounded-lg">
+                                        <p className="text-2xl font-bold text-white">0</p>
+                                        <p className="text-[10px] text-zinc-500 uppercase">Usuarios</p>
+                                    </div>
+                                    <div className="text-center p-3 bg-white/5 rounded-lg">
+                                        <p className="text-2xl font-bold text-white">0</p>
+                                        <p className="text-[10px] text-zinc-500 uppercase">Tickets</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <SheetFooter className="mt-auto pt-6 border-t border-white/10">
+                        <Button 
+                            className="w-full bg-zinc-800 hover:bg-zinc-700 text-white" 
+                            onClick={() => setIsViewSheetOpen(false)}
+                        >
+                            Cerrar Vista
+                        </Button>
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
+
+            <AlertDialog open={!!companyToDelete} onOpenChange={(open) => !open && setCompanyToDelete(null)}>
+
+                <AlertDialogContent className="bg-zinc-900 border-white/10 text-white">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Está absolutamente seguro?</AlertDialogTitle>
+                        <AlertDialogDescription className="text-zinc-400">
+                            Esta acción eliminará permanentemente la empresa <strong>{companyToDelete?.name}</strong> y todos sus datos asociados del servidor.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel className="bg-transparent border-white/10 hover:bg-white/5">Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600">
+                            Eliminar Definitivamente
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

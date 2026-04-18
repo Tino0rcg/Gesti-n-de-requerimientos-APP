@@ -11,13 +11,27 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { users } from "@/lib/data"; // Mock data
 import { signOut } from "@/app/login/actions";
 import { LogOut, Settings, User } from "lucide-react";
 
-export function UserNav() {
-  // In a real app, you'd get the current user from session/context
-  const currentUser = users.find(u => u.role === 'Manager')!;
+export interface UserNavProps {
+  user: {
+    name: string;
+    email: string;
+    role: string;
+    empresa: string;
+    avatarUrl: string;
+  }
+}
+
+export function UserNav({ user }: UserNavProps) {
+  const currentUser = user || {
+    name: "Cargando...",
+    email: "",
+    role: "User",
+    empresa: "",
+    avatarUrl: "",
+  };
 
   return (
     <DropdownMenu>
@@ -25,7 +39,7 @@ export function UserNav() {
         <Button variant="ghost" className="relative h-9 w-9 rounded-full border border-white/10 p-0 hover:bg-white/5 transition-all">
           <Avatar className="h-9 w-9">
             <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} />
-            <AvatarFallback className="bg-primary/20 text-primary font-bold">{currentUser.name.charAt(0)}</AvatarFallback>
+            <AvatarFallback className="bg-primary/20 text-primary font-bold">{currentUser.name ? currentUser.name.charAt(0) : 'U'}</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>

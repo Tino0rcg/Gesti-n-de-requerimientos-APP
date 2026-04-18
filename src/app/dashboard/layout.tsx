@@ -16,6 +16,7 @@ import {
     BriefcaseBusiness,
 } from "lucide-react";
 import Image from "next/image";
+import { createClient } from "@/lib/supabase/server";
 
 import {
     Breadcrumb,
@@ -48,11 +49,44 @@ import { Logo } from "@/components/logo";
 import { UserNav } from "@/components/user-nav";
 import { NavLinks } from "@/components/dashboard/nav-links";
 
-export default function DashboardLayout({
+import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
+
+export default async function DashboardLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    let userProfile = null;
+    let companyName = "Desconocida";
+    
+    if (user) {
+        const supabaseAdmin = createSupabaseAdmin(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+
+        const { data: profile } = await supabaseAdmin
+            .from('profiles')
+            .select(`*, companies(name)`)
+            .eq('id', user.id)
+            .single();
+            
+        userProfile = profile;
+        if (profile?.companies && profile?.role?.trim() !== 'Administrador Full') {
+            companyName = Array.isArray(profile.companies) ? profile.companies[0]?.name : profile.companies.name;
+        }
+    }
+
+    const userData = {
+        name: userProfile?.name || 'Usuario',
+        email: userProfile?.email || user?.email || '',
+        role: userProfile?.role || 'Usuario',
+        empresa: companyName || 'Desconocida',
+        avatarUrl: userProfile?.avatar_url || ''
+    };
 
     return (
         <div className="flex min-h-screen w-full flex-col bg-muted/40">
@@ -77,7 +111,7 @@ export default function DashboardLayout({
                         <span>Nuevo Ticket</span>
                     </Link>
 
-                    <NavLinks />
+                    <NavLinks role={userData.role} />
                 </nav>
 
                 <nav className="mt-auto px-4 pb-6">
@@ -116,7 +150,7 @@ export default function DashboardLayout({
                                     Nuevo Requerimiento
                                 </Link>
                                 <div className="flex flex-col gap-2 mt-4">
-                                    <NavLinks />
+                                    <NavLinks role={userData.role} />
                                 </div>
                             </nav>
                         </SheetContent>
@@ -126,7 +160,7 @@ export default function DashboardLayout({
                     </div>
                     <div className="relative ml-auto flex-1 md:grow-0">
                     </div>
-                    <UserNav />
+                    <UserNav user={userData} />
                 </header>
                 <main className="grid flex-1 items-start gap-4 p-4 sm:px-6 sm:py-0 md:gap-8">
                     {children}

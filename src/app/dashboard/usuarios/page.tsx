@@ -2,151 +2,258 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { User } from "@/lib/definitions";
+import { useRouter } from "next/navigation";
+import { 
+    getProfilesAction, 
+    updateProfileAction, 
+    deleteProfileAction,
+    createProfileAction
+} from "@/app/actions/profiles";
+import { getCompaniesAction } from "@/app/actions/companies";
+import { useToast } from "@/hooks/use-toast";
+import { 
+    Users, 
+    MoreHorizontal, 
+    PlusCircle, 
+    Search, 
+    Building, 
+    Mail,
+    Pencil,
+    Trash2,
+    Eye,
+    Shield,
+    User as UserIcon,
+    Calendar,
+    Hash
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { MoreHorizontal, PlusCircle, Search } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Separator } from "@/components/ui/separator";
 
 export default function UsuariosPage() {
     const supabase = createClient();
-    const [usuarios, setUsuarios] = useState<User[]>([]);
-    const [empresasPermitidas, setEmpresasPermitidas] = useState<string[]>([]);
+    const router = useRouter();
+    const { toast } = useToast();
+    const [userRole, setUserRole] = useState<string | null>(null);
+    const [myCompanyId, setMyCompanyId] = useState<string | null>(null);
+    const [usuarios, setUsuarios] = useState<any[]>([]);
+    const [empresas, setEmpresas] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    
-    // Simular el usuario autenticado para el prototipo (Cambiable para pruebas)
-    const [currentUser, setCurrentUser] = useState<User | null>(null);
-    const isGlobalAdmin = currentUser?.role === 'Manager';
-    const isClientAdmin = currentUser?.role === 'ClientAdmin';
-
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [isSheetOpen, setIsSheetOpen] = useState(false);
-    
+    const [isViewSheetOpen, setIsViewSheetOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState<any | null>(null);
+    const [viewingUser, setViewingUser] = useState<any | null>(null);
+    const [userToDelete, setUserToDelete] = useState<any | null>(null);
+
     // Form State
     const [formData, setFormData] = useState({
-        name: "",
+        nombre: "",
         email: "",
-        role: "User",
         empresa: "",
+            rol: "Usuario",
         password: "",
     });
 
     useEffect(() => {
-        const loadData = async () => {
-            const { data: profiles } = await supabase.from('profiles').select('*');
-            const { data: cos } = await supabase.from('companies').select('name');
+        const checkRole = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                router.push("/login");
+                return;
+            }
+
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role, company_id')
+                .eq('id', user.id)
+                .single();
+
+            const role = profile?.role?.trim();
+            if (role !== 'Administrador Full' && role !== 'Administrador Cliente') {
+                toast({ 
+                    title: "Acceso denegado", 
+                    description: "No tienes permisos para ver el directorio de usuarios.", 
+                    variant: "destructive" 
+                });
+                router.push("/dashboard");
+                return;
+            }
             
-            if (profiles) setUsuarios(profiles.map(u => ({ ...u, avatarUrl: u.avatar_url || '/avatars/3.png' })));
-            if (cos) setEmpresasPermitidas(cos.map(c => c.name));
-            if (profiles && profiles.length > 0) setCurrentUser(profiles[0]); // Por ahora primer usuario como sesión
-            setLoading(false);
+            setUserRole(role);
+            setMyCompanyId(profile?.company_id || null);
+            loadData();
         };
-        loadData();
+        checkRole();
     }, []);
 
-    // Sincronizar empresa si cambia el usuario simulado
-    const handleSimulatedUserChange = (userId: string) => {
-        const user = usuarios.find(u => u.id === userId);
-        if (user) {
-            setCurrentUser(user);
-            setFormData(prev => ({
-                ...prev,
-                empresa: user.role === 'ClientAdmin' ? user.empresa : ""
-            }));
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            const [usersRes, companiesRes] = await Promise.all([
+                getProfilesAction(['Usuario', 'Administrador Cliente', 'Técnico', 'Administrador Full']),
+                getCompaniesAction()
+            ]);
+            
+            if (usersRes.success) setUsuarios(usersRes.data);
+            if (companiesRes.success) setEmpresas(companiesRes.data);
+        } catch (error) {
+            console.error("Error loading data:", error);
+        } finally {
+            setLoading(false);
         }
     };
 
-    const handleAñadirUsuario = async (e: React.FormEvent) => {
-        e.preventDefault();
-        
-        // Aquí iría la lógica de Auth + Profile en un caso real. 
-        // Para este prototipo, insertamos directo en la tabla profiles.
-        const { error } = await supabase.from('profiles').insert({
-            name: formData.name,
-            email: formData.email,
-            role: formData.role,
-            company_id: (await supabase.from('companies').select('id').eq('name', formData.empresa).single()).data?.id,
-            avatar_url: '/avatars/3.png'
+    const handleOpenCreate = () => {
+        setEditingUser(null);
+        setFormData({ 
+            nombre: "", 
+            email: "", 
+            empresa: (userRole === 'Administrador Cliente') ? (myCompanyId || "") : "", 
+            rol: "Usuario", 
+            password: "" 
         });
+        setIsSheetOpen(true);
+    };
 
-        if (!error) {
-            const { data: profiles } = await supabase.from('profiles').select('*');
-            if (profiles) setUsuarios(profiles.map(u => ({ ...u, avatarUrl: u.avatar_url || '/avatars/3.png' })));
-            setIsSheetOpen(false);
-            setFormData({ 
-                name: "", 
-                email: "", 
-                role: "User", 
-                empresa: (isClientAdmin && currentUser) ? currentUser.empresa : "", 
-                password: "" 
-            });
+    const handleOpenEdit = (user: any) => {
+        setEditingUser(user);
+        setFormData({
+            nombre: user.name || "",
+            email: user.email || "",
+            empresa: user.company_id || "interno",
+            rol: user.role || "Usuario",
+            password: "",
+        });
+        setIsSheetOpen(true);
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        
+        try {
+            let result;
+            if (editingUser) {
+                result = await updateProfileAction(editingUser.id, {
+                    name: formData.nombre,
+                    role: formData.rol,
+                    company_id: formData.empresa === "interno" ? undefined : formData.empresa,
+                    avatar_url: `/avatars/1.png`
+                });
+            } else {
+                result = await createProfileAction({
+                    name: formData.nombre,
+                    email: formData.email,
+                    password: formData.password,
+                    role: formData.rol,
+                    company_id: formData.empresa === "interno" ? undefined : formData.empresa,
+                    avatar_url: `/avatars/1.png`
+                });
+            }
+
+            if (!result.success) {
+                toast({
+                    title: "Error",
+                    description: result.error || "Ocurrió un fallo en la operación.",
+                    variant: "destructive",
+                });
+            } else {
+                toast({
+                    title: editingUser ? "Usuario actualizado" : "Usuario registrado",
+                    description: editingUser ? "Perfil modificado correctamente." : "Se ha creado el acceso para el usuario.",
+                });
+                
+                await loadData();
+                setIsSheetOpen(false);
+            }
+        } catch (error) {
+            toast({ title: "Error crítico", description: "Fallo en el servidor.", variant: "destructive" });
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
-    const filteredUsers = (usuarios || []).filter(u => {
-        const matchesSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                             u.email.toLowerCase().includes(searchTerm.toLowerCase());
-        
-        if (isClientAdmin && currentUser) {
-            return matchesSearch && u.empresa === currentUser.empresa;
+    const handleDelete = async () => {
+        if (!userToDelete) return;
+        setIsSubmitting(true);
+        try {
+            const result = await deleteProfileAction(userToDelete.id);
+            if (result.success) {
+                toast({ title: "Usuario eliminado", description: "Cuenta y perfil removidos permanentemente." });
+                await loadData();
+            } else {
+                toast({ title: "Error", description: result.error, variant: "destructive" });
+            }
+        } catch (error) {
+            toast({ title: "Error", description: "Error de conexión.", variant: "destructive" });
+        } finally {
+            setIsSubmitting(false);
+            setUserToDelete(null);
         }
-        return matchesSearch;
-    });
+    };
 
-    if (loading) return <div className="p-8 text-center text-zinc-500 italic">Conectando a base de datos real...</div>;
+    const filteredUsuarios = (usuarios || []).filter(u => 
+        (u.name || "").toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (u.email || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (u.company_name || "").toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    if (loading || !userRole) return <div className="p-8 text-center text-zinc-500 italic">Validando permisos de directorio corporativo...</div>;
 
     return (
         <div className="flex flex-col gap-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Gestión de Usuarios</h1>
-                    <p className="text-muted-foreground mt-1">
-                        Control de acceso y roles para las diferentes cuentas.
+                    <h1 className="text-3xl font-bold tracking-tight text-white uppercase italic">Gestión de Usuarios</h1>
+                    <p className="text-muted-foreground mt-1 text-sm">
+                        Controla el acceso de clientes y administradores a la plataforma.
                     </p>
                 </div>
-                <div className="flex items-center gap-4">
-                    {currentUser && (
-                        <div className="flex flex-col items-end mr-4 p-2 bg-primary/5 border border-primary/10 rounded-lg">
-                            <Label className="text-[10px] text-zinc-500 mb-1">Simular Vista Como:</Label>
-                            <Select value={currentUser.id} onValueChange={handleSimulatedUserChange}>
-                                <SelectTrigger className="h-7 w-[200px] bg-transparent border-none text-xs text-primary font-bold">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                    {usuarios.filter(u => u.role === 'Manager' || u.role === 'ClientAdmin').map(u => (
-                                        <SelectItem key={u.id} value={u.id} className="text-xs">
-                                            {u.name} ({u.role})
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    )}
-                    <Button onClick={() => setIsSheetOpen(true)} className="gap-2">
-                        <PlusCircle className="h-4 w-4" />
-                        Nuevo Usuario
-                    </Button>
-                </div>
+                <Button onClick={handleOpenCreate} className="gap-2 bg-primary hover:bg-primary/90 text-black font-bold">
+                    <PlusCircle className="h-4 w-4" />
+                    Nuevo Usuario
+                </Button>
             </div>
 
-            <Card className="glass-card border-none">
+            <Card className="glass-card border-white/5 bg-black/40">
                 <CardHeader>
                     <div className="flex justify-between items-center">
                         <div className="space-y-1">
-                            <CardTitle>Directorio de Usuarios</CardTitle>
-                            <CardDescription>Usuarios registrados con acceso a la plataforma.</CardDescription>
+                            <CardTitle className="text-white">Directorio de Accesos</CardTitle>
+                            <CardDescription>Usuarios vinculados a empresas clientes o staff interno.</CardDescription>
                         </div>
                         <div className="relative w-64">
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input 
-                                placeholder="Buscar por email o nombre..." 
-                                className="pl-8 bg-black/20 border-white/10"
+                                placeholder="Nombre, email o empresa..." 
+                                className="pl-8 bg-black/20 border-white/10 text-white placeholder:text-zinc-600"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
@@ -155,42 +262,93 @@ export default function UsuariosPage() {
                 </CardHeader>
                 <CardContent>
                     <Table>
-                        <TableHeader>
-                            <TableRow className="border-white/10">
-                                <TableHead>Usuario</TableHead>
-                                <TableHead>Role</TableHead>
-                                <TableHead>Empresa Asignada</TableHead>
-                                <TableHead className="text-right">Acciones</TableHead>
+                        <TableHeader className="bg-white/5">
+                            <TableRow className="border-white/10 hover:bg-transparent">
+                                <TableHead className="text-zinc-400">Usuario</TableHead>
+                                <TableHead className="text-zinc-400">Organización</TableHead>
+                                <TableHead className="text-zinc-400">Rol</TableHead>
+                                <TableHead className="text-zinc-400">Estado</TableHead>
+                                <TableHead className="text-right text-zinc-400">Acciones</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filteredUsers.map((usr) => (
-                                <TableRow key={usr.id} className="border-white/5 hover:bg-white/5">
-                                    <TableCell className="font-medium flex items-center gap-3">
-                                        <Avatar className="h-8 w-8">
-                                            <AvatarFallback className="bg-primary/20 text-primary">
-                                                {usr.name.charAt(0)}
+                            {filteredUsuarios.map((user) => (
+                                <TableRow key={user.id} className="border-white/5 hover:bg-white/5 transition-colors">
+                                    <TableCell className="font-medium flex items-center gap-3 py-4">
+                                        <Avatar className="h-10 w-10 border border-primary/20">
+                                            <AvatarFallback className="bg-primary/10 text-primary uppercase font-bold">
+                                                {(user.name || "U").charAt(0)}
                                             </AvatarFallback>
                                         </Avatar>
-                                        <div>
-                                            <p className="font-medium text-sm leading-none text-white">{usr.name}</p>
-                                            <p className="text-xs text-muted-foreground mt-1">{usr.email}</p>
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-semibold text-white leading-tight">{user.name}</span>
+                                            <span className="text-[10px] text-zinc-500 flex items-center gap-1 mt-1 font-mono">
+                                                <Mail className="h-3 w-3" /> {user.email}
+                                            </span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-2 text-zinc-300 text-sm">
+                                            <Building className="h-3.5 w-3.5 text-muted-foreground" />
+                                            {user.company_name || <span className="text-zinc-600 italic">Vanguardia Staff</span>}
                                         </div>
                                     </TableCell>
                                     <TableCell>
                                         <Badge variant="outline" className={
-                                            usr.role === 'Manager' ? 'bg-red-500/20 text-red-400 border-red-500/30' : 
-                                            usr.role === 'Agent' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 
-                                            'bg-green-500/20 text-green-400 border-green-500/30'
+                                            user.role === 'Administrador Full' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 
+                                            user.role === 'Técnico' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                            user.role === 'Administrador Cliente' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                                            'bg-zinc-800 text-zinc-400 border-zinc-700'
                                         }>
-                                            {usr.role.toUpperCase()}
+                                            {user.role}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell className="text-muted-foreground font-medium text-sm">{usr.empresa}</TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-2">
+                                            <div className="h-1.5 w-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
+                                            <span className="text-[10px] text-zinc-300 uppercase tracking-widest font-bold">Activo</span>
+                                        </div>
+                                    </TableCell>
                                     <TableCell className="text-right">
-                                        <Button variant="ghost" size="icon">
-                                            <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
-                                        </Button>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="hover:bg-white/10 h-8 w-8">
+                                                    <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" className="bg-zinc-900 border-white/10 text-white">
+                                                <DropdownMenuLabel>Gestión</DropdownMenuLabel>
+                                                <DropdownMenuSeparator className="bg-white/5" />
+                                                <DropdownMenuItem 
+                                                    className="gap-2 cursor-pointer" 
+                                                    onSelect={(e) => {
+                                                        e.preventDefault();
+                                                        setViewingUser(user);
+                                                        setIsViewSheetOpen(true);
+                                                    }}
+                                                >
+                                                    <Eye className="h-4 w-4" /> Ver Perfil
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem 
+                                                    className="gap-2 cursor-pointer" 
+                                                    onSelect={(e) => {
+                                                        e.preventDefault();
+                                                        handleOpenEdit(user);
+                                                    }}
+                                                >
+                                                    <Pencil className="h-4 w-4" /> Editar
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem 
+                                                    className="gap-2 cursor-pointer text-red-400 focus:text-red-400 focus:bg-red-400/10" 
+                                                    onSelect={(e) => {
+                                                        e.preventDefault();
+                                                        setUserToDelete(user);
+                                                    }}
+                                                >
+                                                    <Trash2 className="h-4 w-4" /> Eliminar
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -200,70 +358,224 @@ export default function UsuariosPage() {
             </Card>
 
             <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-                <SheetContent className="glass-panel border-l-primary/20">
-                    <SheetHeader>
-                        <SheetTitle>Agregar Nuevo Usuario</SheetTitle>
-                        <SheetDescription>
-                            El usuario recibirá un correo con sus credenciales automáticas.
-                        </SheetDescription>
-                    </SheetHeader>
+                <SheetContent className="glass-panel border-l-primary/20 flex flex-col sm:max-w-md w-full p-0">
+                    <div className="p-6">
+                        <SheetHeader>
+                            <SheetTitle className="text-2xl font-bold text-white leading-none">
+                                {editingUser ? "Editar Usuario" : "Crear Nuevo Acceso"}
+                            </SheetTitle>
+                            <SheetDescription className="text-zinc-500 mt-2">
+                                {editingUser ? "Actualiza los privilegios y datos del perfil." : "Habilita el acceso para un nuevo colaborador o cliente."}
+                            </SheetDescription>
+                        </SheetHeader>
+                    </div>
                     
-                    <form onSubmit={handleAñadirUsuario} className="flex flex-col gap-6 mt-6 h-full">
-                        <div className="space-y-4 flex-1">
+                    <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden px-6">
+                        <div className="space-y-5 flex-1 overflow-y-auto pr-2 custom-scrollbar pb-8">
                             <div className="space-y-2">
-                                <Label>Nombre Completo</Label>
-                                <Input required placeholder="Ej: Juan López" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="bg-black/20" />
+                                <Label className="text-zinc-400 text-xs">Nombre Completo</Label>
+                                <Input 
+                                    required 
+                                    placeholder="Ej: Roberto Contreras" 
+                                    value={formData.nombre} 
+                                    onChange={e => setFormData({...formData, nombre: e.target.value})} 
+                                    className="bg-white/5 border-white/10 focus:border-primary/50" 
+                                />
                             </div>
                             <div className="space-y-2">
-                                <Label>Correo Electrónico</Label>
-                                <Input required type="email" placeholder="ejemplo@empresa.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="bg-black/20" />
+                                <Label className="text-zinc-400 text-xs">Correo Electrónico</Label>
+                                <Input 
+                                    required 
+                                    type="email" 
+                                    placeholder="usuario@dominio.cl" 
+                                    value={formData.email} 
+                                    onChange={e => setFormData({...formData, email: e.target.value})} 
+                                    className="bg-white/5 border-white/10" 
+                                    disabled={!!editingUser} 
+                                />
                             </div>
+                            {!editingUser && (
+                                <div className="space-y-2">
+                                    <Label className="text-zinc-400 text-xs text-primary">Contraseña Temporal</Label>
+                                    <Input 
+                                        required 
+                                        type="password" 
+                                        placeholder="••••••••" 
+                                        value={formData.password} 
+                                        onChange={e => setFormData({...formData, password: e.target.value})} 
+                                        className="bg-white/5 border-primary/20 focus:border-primary/50" 
+                                    />
+                                </div>
+                            )}
+                            
                             <div className="space-y-2">
-                                <Label>Contraseña de Acceso</Label>
-                                <Input required type="password" placeholder="••••••••" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="bg-black/20" />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Empresa Perteneciente</Label>
-                                {isClientAdmin ? (
-                                    <div className="p-3 bg-white/5 border border-white/10 rounded-md text-sm text-zinc-400 font-medium">
-                                        Empresa bloqueada: <span className="text-primary">{currentUser?.empresa || "Sin Empresa"}</span>
-                                    </div>
-                                ) : (
-                                    <Select required value={formData.empresa} onValueChange={(v) => setFormData({...formData, empresa: v})}>
-                                        <SelectTrigger className="bg-black/20 text-white border-white/10">
-                                            <SelectValue placeholder="Seleccionar empresa..." />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                            {empresasPermitidas.map(emp => (
-                                                <SelectItem key={emp} value={emp}>{emp}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                )}
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Nivel de Permisos</Label>
-                                <Select value={formData.role} onValueChange={(v) => setFormData({...formData, role: v})}>
-                                    <SelectTrigger className="bg-black/20">
-                                        <SelectValue placeholder="Selecciona un rol" />
+                                <Label className="text-zinc-400 text-xs">Empresa Cliente / Staff</Label>
+                                <Select value={formData.empresa} onValueChange={(v) => setFormData({...formData, empresa: v})}>
+                                    <SelectTrigger className="bg-white/5 border-white/10">
+                                        <SelectValue placeholder="Seleccionar empresa..." />
                                     </SelectTrigger>
-                                    <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
-                                        <SelectItem value="User">Cliente Externo (Usuario)</SelectItem>
-                                        <SelectItem value="ClientAdmin">Administrador de Empresa (Cliente)</SelectItem>
-                                        <SelectItem value="Agent">Técnico / Soporte (Agente)</SelectItem>
-                                        <SelectItem value="Manager">Administrador Global (Mesa Ayuda)</SelectItem>
+                                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                        <SelectItem value="interno" disabled={userRole === 'Administrador Cliente'}>
+                                            Sin empresa (Interno)
+                                        </SelectItem>
+                                        {empresas.map(emp => (
+                                            <SelectItem 
+                                                key={emp.id} 
+                                                value={emp.id}
+                                                disabled={(userRole === 'Administrador Cliente') && emp.id !== myCompanyId}
+                                            >
+                                                {emp.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-zinc-400 text-xs text-primary">Rol en Plataforma</Label>
+                                <Select value={formData.rol} onValueChange={(v) => setFormData({...formData, rol: v})}>
+                                    <SelectTrigger className="bg-white/5 border-primary/20">
+                                        <SelectValue placeholder="Rol de acceso..." />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                        <SelectItem value="Usuario">Cliente Externo (Usuario)</SelectItem>
+                                        <SelectItem value="Administrador Cliente">Administrador de Empresa (Cliente)</SelectItem>
+                                        <SelectItem value="Técnico">Técnico / Soporte (Especialista)</SelectItem>
+                                        <SelectItem value="Administrador Full">Administrador Global (Mesa Ayuda)</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
                         </div>
 
-                        <SheetFooter className="pb-8">
-                            <Button type="button" variant="ghost" onClick={() => setIsSheetOpen(false)}>Cancelar</Button>
-                            <Button type="submit">Guardar Usuario</Button>
-                        </SheetFooter>
+                        <div className="py-6 mt-auto border-t border-white/5 flex gap-3">
+                            <Button type="button" variant="ghost" className="flex-1 hover:bg-white/5" onClick={() => setIsSheetOpen(false)} disabled={isSubmitting}>
+                                Cancelar
+                            </Button>
+                            <Button type="submit" className="flex-1 bg-primary hover:bg-primary/90 text-black font-bold uppercase tracking-wider" disabled={isSubmitting}>
+                                {isSubmitting ? "Procesando..." : (editingUser ? "Guardar" : "Crear Acceso")}
+                            </Button>
+                        </div>
                     </form>
                 </SheetContent>
             </Sheet>
+
+            <Sheet open={isViewSheetOpen} onOpenChange={setIsViewSheetOpen}>
+                <SheetContent className="glass-panel border-l-primary/20 flex flex-col sm:max-w-md w-full p-0">
+                    <div className="p-6">
+                        <SheetHeader>
+                            <SheetTitle className="flex items-center gap-2 text-white">
+                                <UserIcon className="h-5 w-5 text-primary" />
+                                Perfil de Usuario
+                            </SheetTitle>
+                            <SheetDescription>
+                                Detalle de cuenta y permisos del sistema.
+                            </SheetDescription>
+                        </SheetHeader>
+                    </div>
+
+                    {viewingUser && (
+                        <div className="mt-2 space-y-6 flex-1 overflow-y-auto px-6 custom-scrollbar pb-8">
+                            <div className="flex flex-col items-center justify-center p-6 bg-white/5 rounded-2xl border border-white/10 mb-6 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-4 opacity-5">
+                                    <Shield className="h-24 w-24" />
+                                </div>
+                                <Avatar className="h-20 w-20 border-2 border-primary/20 mb-4">
+                                    <AvatarFallback className="bg-primary/10 text-primary text-2xl font-bold uppercase">
+                                        {(viewingUser.name || "U").charAt(0)}
+                                    </AvatarFallback>
+                                </Avatar>
+                                <h3 className="text-xl font-bold text-white tracking-tight">{viewingUser.name}</h3>
+                                <Badge variant="outline" className="mt-2 bg-primary/20 text-primary border-primary/30 uppercase text-[10px] tracking-widest font-bold px-3">
+                                    {viewingUser.role}
+                                </Badge>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 gap-3">
+                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-1">
+                                        <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                                            <Mail className="h-3 w-3" /> Correo Electrónico
+                                        </div>
+                                        <p className="text-white text-sm break-all font-mono">{viewingUser.email}</p>
+                                    </div>
+
+                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-1">
+                                        <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                                            <Building className="h-3 w-3" /> Organización
+                                        </div>
+                                        <p className="text-white text-sm">
+                                            {viewingUser.company_name || "Staff Interno (Vanguardia)"}
+                                        </p>
+                                    </div>
+
+                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-1">
+                                        <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                                            <Hash className="h-3 w-3" /> ID Único de Sistema
+                                        </div>
+                                        <p className="text-[10px] text-zinc-400 font-mono italic break-all leading-tight">
+                                            {viewingUser.id}
+                                        </p>
+                                    </div>
+
+                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-1">
+                                        <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                                            <Calendar className="h-3 w-3" /> Fecha de Registro
+                                        </div>
+                                        <p className="text-white text-sm">
+                                            {viewingUser.created_at ? new Date(viewingUser.created_at).toLocaleDateString('es-CL', { 
+                                                day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                                            }) : 'Fecha no disponible'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <Separator className="bg-white/5" />
+
+                            <div className="space-y-4">
+                                <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Estadísticas de Usuario</h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5 text-center">
+                                        <p className="text-2xl font-bold text-white">0</p>
+                                        <p className="text-[9px] text-zinc-500 uppercase font-bold">Tickets Creados</p>
+                                    </div>
+                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5 text-center">
+                                        <p className="text-xs font-semibold text-green-400">Activo</p>
+                                        <p className="text-[9px] text-zinc-500 uppercase font-bold">Estado Actual</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="p-6 mt-auto border-t border-white/5">
+                        <Button 
+                            className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold" 
+                            onClick={() => setIsViewSheetOpen(false)}
+                        >
+                            Cerrar Expediente
+                        </Button>
+                    </div>
+                </SheetContent>
+            </Sheet>
+
+            <AlertDialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
+
+                <AlertDialogContent className="bg-zinc-900 border-white/10 text-white shadow-2xl">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="text-white text-xl uppercase font-bold tracking-tight">¿Revocar acceso permanentemente?</AlertDialogTitle>
+                        <AlertDialogDescription className="text-zinc-400 mt-2">
+                            Se eliminará la cuenta de <strong>{userToDelete?.name}</strong>. Esta persona ya no podrá iniciar sesión y perderá todos sus privilegios de inmediato.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="mt-6">
+                        <AlertDialogCancel className="bg-transparent border-white/10 hover:bg-white/5 text-white">Mantenert Usuario</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600 text-white font-bold">
+                            Eliminar Definitivamente
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

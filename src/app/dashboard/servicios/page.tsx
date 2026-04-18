@@ -2,6 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
+import { 
+    createServiceAction, 
+    getServicesAction, 
+    updateServiceAction, 
+    deleteServiceAction 
+} from "@/app/actions/services";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,17 +18,41 @@ import {
     Clock, 
     MoreVertical, 
     PlusCircle, 
-    Server, 
-    ShieldCheck, 
-    Wifi, 
     Settings,
     HardDrive,
-    Lock
+    Lock,
+    Wifi,
+    Pencil,
+    Trash2,
+    Eye,
+    Info,
+    History,
+    Zap,
+    Shield
 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Separator } from "@/components/ui/separator";
 
 const iconMap: Record<string, any> = {
     Hardware: <HardDrive className="h-5 w-5" />,
@@ -32,9 +64,17 @@ const iconMap: Record<string, any> = {
 
 export default function ServiciosPage() {
     const supabase = createClient();
+    const router = useRouter();
+    const { toast } = useToast();
+    const [userRole, setUserRole] = useState<string | null>(null);
     const [catalog, setCatalog] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSheetOpen, setIsSheetOpen] = useState(false);
+    const [isViewSheetOpen, setIsViewSheetOpen] = useState(false);
+    const [editingService, setEditingService] = useState<any | null>(null);
+    const [viewingService, setViewingService] = useState<any | null>(null);
+    const [serviceToDelete, setServiceToDelete] = useState<any | null>(null);
     
     // Form State
     const [formData, setFormData] = useState({
@@ -44,16 +84,63 @@ export default function ServiciosPage() {
     });
 
     useEffect(() => {
-        const loadServices = async () => {
-            const { data } = await supabase.from('services').select('*');
-            if (data) setCatalog(data);
-            setLoading(false);
+        const checkRole = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                router.push("/login");
+                return;
+            }
+
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', user.id)
+                .single();
+
+            if (profile?.role?.trim() !== 'Administrador Full') {
+                toast({ 
+                    title: "Acceso denegado", 
+                    description: "Solo administradores pueden gestionar el catálogo.", 
+                    variant: "destructive" 
+                });
+                router.push("/dashboard");
+                return;
+            }
+            setUserRole(profile.role);
+            loadServices();
         };
-        loadServices();
+        checkRole();
     }, []);
 
-    const handleAñadirServicio = async (e: React.FormEvent) => {
+    const loadServices = async () => {
+        setLoading(true);
+        const result = await getServicesAction();
+        if (result.success && result.data) {
+            setCatalog(result.data);
+        }
+        setLoading(false);
+    };
+
+    const handleOpenCreate = () => {
+        setEditingService(null);
+        setFormData({ nombre: "", category: "Software", slaHours: "48" });
+        setIsSheetOpen(true);
+    };
+
+    const handleOpenEdit = (srv: any) => {
+        setEditingService(srv);
+        setFormData({
+            nombre: srv.name,
+            category: srv.category,
+            slaHours: srv.sla_hours.toString(),
+        });
+        setIsSheetOpen(true);
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setIsSubmitting(true);
+
         const priorityMap: Record<string, string> = {
             "4": "Crítica",
             "12": "Alta",
@@ -61,23 +148,70 @@ export default function ServiciosPage() {
             "72": "Baja"
         };
 
-        const { error } = await supabase.from('services').insert({
-            id: `SRV-${Math.floor(Math.random() * 1000)}`,
-            name: formData.nombre,
-            category: formData.category,
-            priority: priorityMap[formData.slaHours] || "Media",
-            sla_hours: parseInt(formData.slaHours),
-        });
+        try {
+            let result;
+            if (editingService) {
+                result = await updateServiceAction(editingService.id, {
+                    name: formData.nombre,
+                    category: formData.category,
+                    priority: priorityMap[formData.slaHours] || "Media",
+                    sla_hours: parseInt(formData.slaHours),
+                });
+            } else {
+                result = await createServiceAction({
+                    name: formData.nombre,
+                    category: formData.category,
+                    priority: priorityMap[formData.slaHours] || "Media",
+                    sla_hours: parseInt(formData.slaHours),
+                });
+            }
 
-        if (!error) {
-            const { data } = await supabase.from('services').select('*');
-            if (data) setCatalog(data);
-            setIsSheetOpen(false);
-            setFormData({ nombre: "", category: "Software", slaHours: "48" });
+            if (!result.success) {
+                toast({
+                    title: "Error",
+                    description: result.error || "No se pudo procesar el servicio.",
+                    variant: "destructive",
+                });
+            } else {
+                toast({
+                    title: editingService ? "Servicio actualizado" : "Servicio registrado",
+                    description: editingService ? "Los cambios se guardaron correctamente." : "El ítem ha sido añadido al catálogo maestro.",
+                });
+                
+                await loadServices();
+                setIsSheetOpen(false);
+            }
+        } catch (error) {
+            toast({
+                title: "Error inesperado",
+                description: "Ocurrió un error en el servidor.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
-    if (loading) return <div className="p-8 text-center text-zinc-500 italic">Cargando catálogo maestro de ANS...</div>;
+    const handleDelete = async () => {
+        if (!serviceToDelete) return;
+        setIsSubmitting(true);
+        try {
+            const result = await deleteServiceAction(serviceToDelete.id);
+            if (result.success) {
+                toast({ title: "Servicio eliminado", description: "El ítem fue removido del catálogo maestro." });
+                await loadServices();
+            } else {
+                toast({ title: "Error", description: result.error, variant: "destructive" });
+            }
+        } catch (error) {
+            toast({ title: "Error", description: "Error al comunicar con el servidor.", variant: "destructive" });
+        } finally {
+            setIsSubmitting(false);
+            setServiceToDelete(null);
+        }
+    };
+
+    if (loading || !userRole) return <div className="p-8 text-center text-zinc-500 italic">Validando seguridad de catálogo ANS...</div>;
 
     return (
         <div className="flex flex-col gap-6">
@@ -88,7 +222,7 @@ export default function ServiciosPage() {
                         Define los entregables contractuales y sus tiempos de respuesta (SLA).
                     </p>
                 </div>
-                <Button onClick={() => setIsSheetOpen(true)} className="gap-2 bg-primary hover:bg-primary/90 text-black font-bold">
+                <Button onClick={handleOpenCreate} className="gap-2 bg-primary hover:bg-primary/90 text-black font-bold">
                     <PlusCircle className="h-4 w-4" />
                     Nuevo Servicio
                 </Button>
@@ -102,13 +236,55 @@ export default function ServiciosPage() {
                                 <div className="p-2.5 bg-primary/10 rounded-xl text-primary border border-primary/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]">
                                     {iconMap[srv.category] || <BriefcaseBusiness className="h-5 w-5" />}
                                 </div>
-                                <Badge variant="outline" className={
-                                    srv.priority === 'Crítica' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                                    srv.priority === 'Alta' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
-                                    'bg-zinc-800 text-zinc-400 border-zinc-700'
-                                }>
-                                    {srv.priority}
-                                </Badge>
+                                <div className="flex gap-2">
+                                    <Badge variant="outline" className={
+                                        srv.priority === 'Crítica' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                                        srv.priority === 'Alta' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
+                                        'bg-zinc-800 text-zinc-400 border-zinc-700'
+                                    }>
+                                        {srv.priority}
+                                    </Badge>
+                                    
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-white">
+                                                <MoreVertical className="h-4 w-4" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="bg-zinc-900 border-white/10 text-white">
+                                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                            <DropdownMenuSeparator className="bg-white/5" />
+                                            <DropdownMenuItem 
+                                                className="gap-2 cursor-pointer" 
+                                                onSelect={(e) => {
+                                                    e.preventDefault();
+                                                    setViewingService(srv); 
+                                                    setIsViewSheetOpen(true);
+                                                }}
+                                            >
+                                                <Eye className="h-4 w-4" /> Ver Detalles
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem 
+                                                className="gap-2 cursor-pointer" 
+                                                onSelect={(e) => {
+                                                    e.preventDefault();
+                                                    handleOpenEdit(srv);
+                                                }}
+                                            >
+                                                <Pencil className="h-4 w-4" /> Editar
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem 
+                                                className="gap-2 cursor-pointer text-red-400 focus:text-red-400 focus:bg-red-400/10" 
+                                                onSelect={(e) => {
+                                                    e.preventDefault();
+                                                    setServiceToDelete(srv);
+                                                }}
+                                            >
+                                                <Trash2 className="h-4 w-4" /> Eliminar
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </div>
                             </div>
                             <CardTitle className="mt-4 text-lg font-bold text-white leading-tight uppercase tracking-tight">{srv.name}</CardTitle>
                             <CardDescription className="flex items-center gap-1.5 mt-2 font-medium text-primary">
@@ -133,16 +309,16 @@ export default function ServiciosPage() {
             </div>
 
             <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-                <SheetContent className="glass-panel border-l-primary/20">
+                <SheetContent className="glass-panel border-l-primary/20 flex flex-col sm:max-w-md w-full">
                     <SheetHeader>
-                        <SheetTitle>Crear Nuevo Servicio</SheetTitle>
+                        <SheetTitle>{editingService ? "Editar Servicio" : "Crear Nuevo Servicio"}</SheetTitle>
                         <SheetDescription>
-                            Define un nuevo entregable para tus clientes. El sistema aplicará este SLA automáticamente.
+                            {editingService ? "Modifica los parámetros del catálogo." : "Define un nuevo entregable para tus clientes. El sistema aplicará este SLA automáticamente."}
                         </SheetDescription>
                     </SheetHeader>
                     
-                    <form onSubmit={handleAñadirServicio} className="flex flex-col gap-6 mt-6 h-full">
-                        <div className="space-y-4 flex-1">
+                    <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden mt-6">
+                        <div className="space-y-4 flex-1 overflow-y-auto pr-4 custom-scrollbar pb-6">
                             <div className="space-y-2">
                                 <Label>Nombre del Servicio / Ítem</Label>
                                 <Input 
@@ -160,7 +336,7 @@ export default function ServiciosPage() {
                                     <SelectTrigger className="bg-black/20 border-white/10">
                                         <SelectValue placeholder="Categoría..." />
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
                                         <SelectItem value="Hardware">Hardware e Infraestructura</SelectItem>
                                         <SelectItem value="Software">Software y Aplicaciones</SelectItem>
                                         <SelectItem value="Redes">Telecomunicaciones y Redes</SelectItem>
@@ -176,7 +352,7 @@ export default function ServiciosPage() {
                                     <SelectTrigger className="bg-black/20 border-white/10">
                                         <SelectValue placeholder="SLA..." />
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
                                         <SelectItem value="4">4 Horas (Crítico / Emergencia)</SelectItem>
                                         <SelectItem value="12">12 Horas (Alta Prioridad)</SelectItem>
                                         <SelectItem value="48">48 Horas (Planificado / Media)</SelectItem>
@@ -189,13 +365,122 @@ export default function ServiciosPage() {
                             </div>
                         </div>
 
-                        <SheetFooter className="pb-8">
-                            <Button type="button" variant="ghost" onClick={() => setIsSheetOpen(false)}>Cancelar</Button>
-                            <Button type="submit" className="bg-primary hover:bg-primary/90">Registrar en Catálogo</Button>
+                        <SheetFooter className="mt-auto pt-6 pb-2 border-t border-white/10">
+                            <Button type="button" variant="ghost" onClick={() => setIsSheetOpen(false)} disabled={isSubmitting}>Cancelar</Button>
+                            <Button type="submit" className="bg-primary hover:bg-primary/90 text-black font-bold" disabled={isSubmitting}>
+                                {isSubmitting ? "Procesando..." : (editingService ? "Guardar Cambios" : "Registrar en Catálogo")}
+                            </Button>
                         </SheetFooter>
                     </form>
                 </SheetContent>
             </Sheet>
+
+            <Sheet open={isViewSheetOpen} onOpenChange={setIsViewSheetOpen}>
+                <SheetContent className="glass-panel border-l-primary/20 flex flex-col sm:max-w-md w-full p-0">
+                    <div className="p-6">
+                        <SheetHeader>
+                            <SheetTitle className="flex items-center gap-2 text-white">
+                                <Zap className="h-5 w-5 text-primary" />
+                                Detalles del Servicio
+                            </SheetTitle>
+                            <SheetDescription>
+                                Especificaciones técnicas y tiempos de respuesta.
+                            </SheetDescription>
+                        </SheetHeader>
+                    </div>
+
+                    {viewingService && (
+                        <div className="mt-2 space-y-6 flex-1 overflow-y-auto px-6 custom-scrollbar pb-8">
+                            <div className="flex flex-col items-center justify-center p-8 bg-white/5 rounded-2xl border border-white/10 mb-6 relative overflow-hidden text-center">
+                                <div className="p-4 bg-primary/10 rounded-full border border-primary/20 mb-4">
+                                    {iconMap[viewingService.category] || <Settings className="h-10 w-10 text-primary" />}
+                                </div>
+                                <h3 className="text-xl font-bold text-white tracking-tight">{viewingService.name}</h3>
+                                <Badge variant="outline" className="mt-3 bg-zinc-800 text-zinc-400 border-zinc-700 uppercase text-[9px] tracking-[0.2em] font-bold">
+                                    Categoría: {viewingService.category}
+                                </Badge>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 gap-3">
+                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-2">
+                                        <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                                            <Clock className="h-3 w-3" /> Compromiso de Respuesta (SLA)
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-white font-bold">{viewingService.sla_hours} Horas Hábiles</p>
+                                            <Badge className="bg-primary/20 text-primary border-primary/30">
+                                                {viewingService.priority}
+                                            </Badge>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-2">
+                                        <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                                            <Info className="h-3 w-3" /> Descripción del Servicio
+                                        </div>
+                                        <p className="text-zinc-300 text-sm leading-relaxed">
+                                            Soporte técnico especializado para la gestión y mantenimiento de {viewingService.name.toLowerCase()}.
+                                        </p>
+                                    </div>
+
+                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-2">
+                                        <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                                            <History className="h-3 w-3" /> Historial Operativo
+                                        </div>
+                                        <p className="text-white text-sm">
+                                            Vigente desde el {new Date(viewingService.created_at).toLocaleDateString('es-CL')}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <Separator className="bg-white/5" />
+
+                            <div className="bg-primary/5 border border-primary/10 rounded-xl p-4">
+                                <div className="flex gap-4">
+                                    <div className="h-10 w-10 shrink-0 rounded-full bg-primary/20 flex items-center justify-center">
+                                        <Shield className="h-5 w-5 text-primary" />
+                                    </div>
+                                    <div>
+                                        <h5 className="text-sm font-bold text-white">Garantía de Servicio</h5>
+                                        <p className="text-[11px] text-zinc-400 mt-1 leading-relaxed">
+                                            Este servicio cumple con los estándares corporativos de calidad y tiempos de resolución definidos en el contrato marco.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="p-6 mt-auto border-t border-white/5">
+                        <Button 
+                            className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold" 
+                            onClick={() => setIsViewSheetOpen(false)}
+                        >
+                            Cerrar Catálogo
+                        </Button>
+                    </div>
+                </SheetContent>
+            </Sheet>
+
+            <AlertDialog open={!!serviceToDelete} onOpenChange={(open) => !open && setServiceToDelete(null)}>
+
+                <AlertDialogContent className="bg-zinc-900 border-white/10 text-white">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Eliminar servicio del catálogo?</AlertDialogTitle>
+                        <AlertDialogDescription className="text-zinc-400">
+                            Esta acción eliminará <strong>{serviceToDelete?.name}</strong>. Esto no afectará a los tickets ya creados con este servicio, pero no podrá seleccionarse para nuevos casos.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel className="bg-transparent border-white/10 hover:bg-white/5">Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600">
+                            Confirmar Eliminación
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

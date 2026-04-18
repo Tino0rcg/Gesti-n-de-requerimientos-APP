@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { format } from "date-fns";
 import { SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageSquare, Clock, UserIcon, AlertCircle, Play, CheckCircle2, XCircle, Send, UserCheck, Loader2 } from "lucide-react";
+import { MessageSquare, Clock, UserIcon, AlertCircle, Play, CheckCircle2, XCircle, Send, UserCheck, Loader2, Sparkles } from "lucide-react";
 import { getSlaStatus } from "@/lib/sla-utils";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { sendTicketNotification } from "@/app/actions/notifications";
 import { createClient } from "@/lib/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { updateTicketAction, getNotesAction, createNoteAction, getTicketAction } from "@/app/actions/tickets";
 
 interface Props {
   ticketId: string;
@@ -35,8 +37,11 @@ const statusColorMap: Record<string, string> = {
     'Terminado': "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
 };
 
+import { getProfilesAction } from "@/app/actions/profiles";
+
 export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
   const supabase = createClient();
+  const { toast } = useToast();
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [profiles, setProfiles] = useState<User[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -47,9 +52,10 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
   async function fetchData() {
     try {
         setLoading(true);
-        // 1. Ticket
-        const { data: ticketData } = await supabase.from('tickets').select('*').eq('id', ticketId).single();
-        if (ticketData) {
+        // 1. Ticket (Usa acción de servidor para bypass RLS)
+        const ticketResult = await getTicketAction(ticketId);
+        if (ticketResult.success && ticketResult.data) {
+            const ticketData = ticketResult.data;
             setTicket({
                 ...ticketData,
                 createdAt: new Date(ticketData.created_at),
@@ -61,19 +67,16 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
             });
         }
 
-        // 2. Perfiles (Para saber nombres de autores y técnicos)
-        const { data: profilesData } = await supabase.from('profiles').select('*');
-        if (profilesData) setProfiles(profilesData as User[]);
+        // 2. Perfiles (Usa acción de servidor para bypass RLS)
+        const result = await getProfilesAction();
+        if (result.success && result.data) {
+            setProfiles(result.data as User[]);
+        }
 
-        // 3. Notas
-        const { data: notesData } = await supabase
-            .from('notes')
-            .select('*')
-            .eq('ticket_id', ticketId)
-            .order('created_at', { ascending: true });
-        
-        if (notesData) {
-            setNotes(notesData.map(n => ({
+        // 3. Notas (Usa acción de servidor para bypass RLS)
+        const notesResult = await getNotesAction(ticketId);
+        if (notesResult.success && notesResult.data) {
+            setNotes(notesResult.data.map((n: any) => ({
                 ...n,
                 ticketId: n.ticket_id,
                 authorId: n.author_id,
@@ -117,18 +120,16 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
         const { data: userData } = await supabase.auth.getUser();
         if (!userData.user) return;
 
-        const { error } = await supabase.from('notes').insert({
-            ticket_id: ticketId,
-            author_id: userData.user.id,
-            content: newMessage,
-        });
+        const result = await createNoteAction(ticketId, userData.user.id, newMessage);
 
-        if (!error) {
+        if (result.success) {
             setNewMessage("");
             fetchData();
             if (onUpdate) onUpdate();
             // Disparar email en background
             sendTicketNotification(ticketId, "Nuevo mensaje en bitácora");
+        } else {
+            toast({ title: "Error", description: "No se pudo enviar el mensaje.", variant: "destructive" });
         }
     } finally {
         setSending(false);
@@ -136,47 +137,48 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
   };
 
   const handleReassign = async (newAssigneeId: string) => {
-    const { error } = await supabase
-        .from('tickets')
-        .update({ 
-            assignee_id: newAssigneeId,
-            updated_at: new Date().toISOString()
-        })
-        .eq('id', ticketId);
+    const result = await updateTicketAction(ticketId, { 
+        assignee_id: newAssigneeId
+    });
 
-    if (!error) {
+    if (result.success) {
+        const newTechName = profiles.find(u => u.id === newAssigneeId)?.name || "un nuevo técnico";
+        
+        // Log in bitácora
+        const { data: userData } = await supabase.auth.getUser();
+        if (userData.user) {
+            await createNoteAction(ticketId, userData.user.id, `[SISTEMA] Caso reasignado a técnico especialista: ${newTechName}`);
+        }
+
         fetchData();
         if (onUpdate) onUpdate();
-        const newTechName = profiles.find(u => u.id === newAssigneeId)?.name || "un nuevo técnico";
         sendTicketNotification(ticketId, `🔄 Cambio de Responsable: Su requerimiento ha sido re-asignado a ${newTechName}.`);
+        toast({ title: "Técnico reasignado", description: `Responsable actualizado a ${newTechName}.` });
+    } else {
+        toast({ title: "Error", description: "No se pudo reasignar el técnico.", variant: "destructive" });
     }
   };
 
   const handleAction = async (newStatus: TicketStatus, autoMessage?: string) => {
-    const updateData: any = { 
-        status: newStatus,
-        updated_at: new Date().toISOString()
-    };
+    const updateData: any = { status: newStatus };
     if (newStatus === "Terminado") updateData.resolved_at = new Date().toISOString();
 
-    const { error } = await supabase
-        .from('tickets')
-        .update(updateData)
-        .eq('id', ticketId);
+    const result = await updateTicketAction(ticketId, updateData);
 
-    if (!error) {
+    if (result.success) {
         if (autoMessage) {
             const { data: userData } = await supabase.auth.getUser();
-            await supabase.from('notes').insert({
-                ticket_id: ticketId,
-                author_id: userData.user?.id,
-                content: autoMessage,
-            });
+            if (userData.user) {
+                await createNoteAction(ticketId, userData.user.id, `[SISTEMA] ${autoMessage}`);
+            }
         }
         fetchData();
         if (onUpdate) onUpdate();
         // Disparar email en background
         sendTicketNotification(ticketId, autoMessage ? `Cambio de Estado: ${newStatus}` : `Estado actualizado a ${newStatus}`);
+        toast({ title: "Estado actualizado", description: `El ticket ahora está "${newStatus}".` });
+    } else {
+        toast({ title: "Error", description: "No se pudo actualizar el estado.", variant: "destructive" });
     }
   };
 
@@ -214,6 +216,55 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
                 <span>Módulo: {ticket.category}</span>
             </div>
         </div>
+
+        {(() => {
+            const imageMarker = "[ADJUNTO_IMAGEN]: ";
+            const hasImage = ticket.description.includes(imageMarker);
+            const cleanDescription = hasImage ? ticket.description.split(imageMarker)[0].trim() : ticket.description;
+            const imageUrl = hasImage ? ticket.description.split(imageMarker)[1].trim() : null;
+
+            return (
+                <>
+                    <div className="mt-5 p-4 bg-primary/5 rounded-xl border border-primary/20">
+                        <h4 className="text-[11px] font-bold uppercase tracking-widest text-primary mb-2 flex items-center gap-2">
+                            <Sparkles className="w-3 h-3" /> Descripción del Problema
+                        </h4>
+                        <div className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                            {cleanDescription || "Sin descripción proporcionada."}
+                        </div>
+                    </div>
+
+                    {imageUrl && (
+                        <div className="mt-4 group relative">
+                            <div className="absolute inset-0 bg-primary/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl" />
+                            <div className="relative rounded-xl border border-white/10 overflow-hidden bg-black/40 shadow-2xl">
+                                <div className="p-2 border-b border-white/5 bg-white/5 flex items-center justify-between">
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500 px-2 py-0.5 rounded-full border border-white/5">
+                                        Evidencia Adjunta
+                                    </span>
+                                    <ImageIcon className="w-3 h-3 text-primary" />
+                                </div>
+                                <div className="aspect-video relative overflow-hidden">
+                                    <img 
+                                        src={imageUrl} 
+                                        alt="Evidencia del problema" 
+                                        className="w-full h-full object-contain hover:scale-105 transition-transform duration-500"
+                                    />
+                                    <a 
+                                        href={imageUrl} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="absolute bottom-3 right-3 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg text-[10px] text-white font-bold uppercase tracking-widest border border-white/10 opacity-0 group-hover:opacity-100 transition-all hover:bg-primary hover:text-black"
+                                    >
+                                        Ver imagen completa
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </>
+            );
+        })()}
       </SheetHeader>
 
       {/* Controles de Flujo de Trabajo (Workflow Panel) */}
@@ -221,27 +272,27 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
         <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Flujo de Trabajo Operativo</h4>
         <div className="flex flex-wrap gap-2">
             {ticket.status === 'Ingresado' && (
-                <Button onClick={() => handleAction('En proceso', '⚙️ Ticket marcado como "En Proceso" por el técnico. Comenzando a trabajar en la solución.')} size="sm" className="bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 border border-cyan-500/30">
+                <Button onClick={() => handleAction('En proceso', 'Ticket marcado como "En Proceso" por el técnico. Comenzando a trabajar en la solución.')} size="sm" className="bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 border border-cyan-500/30">
                     <Play className="w-4 h-4 mr-2" /> Iniciar Trabajo (Agente)
                 </Button>
             )}
             
             {ticket.status === 'En proceso' && (
-                <Button onClick={() => handleAction('Espera de aprobación', '⏳ Trabajo finalizado por el técnico. Enviado al cliente para revisión y control de calidad.')} size="sm" className="bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 border border-yellow-500/30">
+                <Button onClick={() => handleAction('Espera de aprobación', 'Trabajo finalizado por el técnico. Enviado al cliente para revisión y control de calidad.')} size="sm" className="bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 border border-yellow-500/30">
                     <AlertCircle className="w-4 h-4 mr-2" /> Enviar a Revisión (Al Cliente)
                 </Button>
             )}
 
             {ticket.status === 'Espera de aprobación' && (
                 <>
-                    <Button onClick={() => handleAction('Terminado', '✅ Solución validada y aceptada por el cliente. Ticket cerrado exitosamente.')} size="sm" className="bg-green-500/20 text-green-400 hover:bg-green-500/30 border border-green-500/30">
+                    <Button onClick={() => handleAction('Terminado', 'Solución validada y aceptada por el cliente. Ticket cerrado exitosamente.')} size="sm" className="bg-green-500/20 text-green-400 hover:bg-green-500/30 border border-green-500/30">
                         <CheckCircle2 className="w-4 h-4 mr-2" /> Aprobar Solución
                     </Button>
                     <div className="group relative">
                         <Button 
                             disabled={!newMessage.trim()} 
                             onClick={() => {
-                                handleAction('En proceso', `❌ Solución RECHAZADA por el cliente.\n\nMotivo del rechazo: ${newMessage}`);
+                                handleAction('En proceso', `Solución RECHAZADA por el cliente. Motivo: ${newMessage}`);
                                 setNewMessage(""); // Limpiar caja después
                             }} 
                             size="sm" 
@@ -280,17 +331,21 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
                 </Avatar>
                 <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-white truncate">{assignee?.name || "Sin Asignar"}</p>
-                    <p className="text-[10px] text-muted-foreground uppercase">{assignee?.role === 'Agent' ? 'Técnico Especialista' : 'Supervisor'}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase">{assignee?.role === 'Técnico' ? 'Técnico Especialista' : 'Supervisor'}</p>
                 </div>
             </div>
             <div className="pt-2 border-t border-blue-500/10">
                 <Label className="text-[10px] text-zinc-500 mb-1.5 block">Cambiar responsable del caso:</Label>
-                <Select value={ticket.assigneeId || ""} onValueChange={handleReassign}>
-                    <SelectTrigger className="h-8 bg-black/40 border-white/5 text-xs text-zinc-300">
+                <Select 
+                    disabled={ticket.status === 'Terminado'} 
+                    value={ticket.assigneeId || ""} 
+                    onValueChange={handleReassign}
+                >
+                    <SelectTrigger className={`h-8 bg-black/40 border-white/5 text-xs text-zinc-300 ${ticket.status === 'Terminado' ? 'opacity-50' : ''}`}>
                         <SelectValue placeholder="Seleccionar técnico..." />
                     </SelectTrigger>
                     <SelectContent className="bg-zinc-900 border-white/10">
-                        {profiles.filter(u => u.role === 'Agent' || u.role === 'Manager').map(u => (
+                        {profiles.filter(u => u.role === 'Técnico' || u.role === 'Administrador Full').map(u => (
                             <SelectItem key={u.id} value={u.id} className="text-xs focus:bg-blue-500/20 focus:text-blue-200">
                                 {u.name} ({u.empresa})
                             </SelectItem>
@@ -323,6 +378,28 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
             ) : (
                 <div className="space-y-4">
                     {notes.map(n => {
+                        const isSystem = n.content.trim().startsWith("[SISTEMA]");
+                        const content = isSystem ? n.content.replace("[SISTEMA] ", "").replace("[SISTEMA]", "") : n.content;
+                        
+                        if (isSystem) {
+                            return (
+                                <div key={n.id} className="flex flex-col items-center py-4 relative">
+                                    <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                                        <div className="w-full border-t border-white/5"></div>
+                                    </div>
+                                    <div className="relative flex items-center justify-center">
+                                        <div className="bg-zinc-900 px-4 flex items-center gap-2">
+                                            <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 bg-black/20 px-3 py-1 rounded-full border border-white/5">
+                                                {content}
+                                            </span>
+                                            <span className="text-[9px] text-zinc-600 font-mono">{format(n.createdAt, "HH:mm")}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        }
+
                         const autor = profiles.find(u => u.id === n.authorId);
                         const esSubmitter = n.authorId === ticket.submitterId;
                         
@@ -345,7 +422,7 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
                                         ? 'bg-muted/30 text-foreground rounded-tl-sm' 
                                         : 'bg-primary/20 text-primary shadow-lg shadow-primary/5 border border-primary/20 rounded-tr-sm'
                                     }`}>
-                                        <p className="whitespace-pre-wrap">{n.content}</p>
+                                        <p className="whitespace-pre-wrap">{content}</p>
                                     </div>
                                 </div>
                             </div>
@@ -357,25 +434,36 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
       </ScrollArea>
 
       {/* Input de Mensajes */}
-      <div className="flex-none pt-4 border-t border-white/10 mt-auto">
-        <div className="flex gap-2">
-            <Textarea
-                placeholder={ticket.status === 'Espera de aprobación' ? "Explica el motivo (Si rechazas) o agradece (Si apruebas)..." : "Responde al técnico o agrega detalles..."}
-                className="resize-none min-h-[60px] bg-black/20 border-white/10 text-sm py-3"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        sendMessage();
-                    }
-                }}
-            />
-            <Button onClick={sendMessage} disabled={!newMessage.trim() || sending} className="h-auto shrink-0 bg-primary/20 text-primary hover:bg-primary hover:text-white transition-colors">
-                {sending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-            </Button>
+      {ticket.status !== 'Terminado' ? (
+        <div className="flex-none pt-4 border-t border-white/10 mt-auto">
+            <div className="flex gap-2">
+                <Textarea
+                    placeholder={ticket.status === 'Espera de aprobación' ? "Explica el motivo (Si rechazas) o agradece (Si apruebas)..." : "Responde al técnico o agrega detalles..."}
+                    className="resize-none min-h-[60px] bg-black/20 border-white/10 text-sm py-3"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            sendMessage();
+                        }
+                    }}
+                />
+                <Button onClick={sendMessage} disabled={!newMessage.trim() || sending} className="h-auto shrink-0 bg-primary/20 text-primary hover:bg-primary hover:text-white transition-colors">
+                    {sending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                </Button>
+            </div>
         </div>
-      </div>
+      ) : (
+        <div className="flex-none pt-4 border-t border-white/10 mt-auto">
+            <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 flex items-center justify-center gap-3">
+                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                <span className="text-sm font-bold text-emerald-400 uppercase tracking-widest italic">
+                    Ticket Finalizado y Almacenado en Historial
+                </span>
+            </div>
+        </div>
+      )}
     </div>
   );
 }

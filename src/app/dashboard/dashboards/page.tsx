@@ -3,7 +3,33 @@ import { StatCards } from "@/components/dashboard/stat-cards";
 import { ShieldCheck, BarChart3, TrendingUp } from "lucide-react";
 import { getTickets, getUsers } from "@/lib/data-server";
 
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
+
 export default async function DashboardsPage() {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+        redirect("/login");
+    }
+
+    const supabaseAdmin = createSupabaseAdmin(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+    if (profile?.role?.trim() !== 'Administrador Full') {
+        redirect("/dashboard");
+    }
+
     const tickets = await getTickets();
     const allUsers = await getUsers();
 

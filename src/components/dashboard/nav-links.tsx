@@ -12,12 +12,12 @@ import {
     BriefcaseBusiness,
 } from "lucide-react";
 
-export function NavLinks() {
+export function NavLinks({ role }: { role?: string }) {
     const pathname = usePathname();
 
-    const items = [
+    const allItems = [
         { section: "Gestión" },
-        { name: "Tablero de Tickets", href: "/dashboard/tickets", icon: Ticket },
+        { name: "Tablero de Control", href: "/dashboard", icon: Ticket },
         { name: "Historial de Tickets", href: "/dashboard/tickets/historial", icon: Archive },
         { section: "Administración" },
         { name: "Clientes y Empresas", href: "/dashboard/clientes", icon: Building2 },
@@ -27,6 +27,34 @@ export function NavLinks() {
         { divider: true },
         { name: "Métricas y Análisis", href: "/dashboard/dashboards", icon: PieChart }
     ];
+
+    const items = allItems.filter((item) => {
+        if (item.section || item.divider) return true;
+        if (!role) return false;
+
+        const roleTrimmed = role?.trim();
+
+        if (item.href === "/dashboard/dashboards") {
+            return roleTrimmed === 'Administrador Full';
+        }
+        
+        if (item.href === "/dashboard/clientes" || item.href === "/dashboard/tecnicos" || item.href === "/dashboard/servicios") {
+            return roleTrimmed === 'Administrador Full';
+        }
+
+        if (item.href === "/dashboard/usuarios") {
+            return roleTrimmed === 'Administrador Full' || roleTrimmed === 'Administrador Cliente';
+        }
+
+        return true;
+    }).filter((item, index, arr) => {
+        // Remove sections/dividers if they have no items below them
+        if (item.section || item.divider) {
+            const nextItem = arr[index + 1];
+            return nextItem && !nextItem.section && !nextItem.divider;
+        }
+        return true;
+    });
 
     return (
         <>
@@ -43,7 +71,9 @@ export function NavLinks() {
                 }
                 
                 const Icon = item.icon!;
-                const isActive = pathname === item.href || (item.href !== "/dashboard/tickets" && pathname?.startsWith(item.href!));
+                const isActive = item.href === "/dashboard" 
+                    ? pathname === "/dashboard" 
+                    : pathname?.startsWith(item.href!);
 
                 return (
                     <Link

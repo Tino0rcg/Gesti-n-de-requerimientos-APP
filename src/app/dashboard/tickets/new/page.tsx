@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Ticket } from "@/lib/definitions";
 import { sendTicketNotification } from "@/app/actions/notifications";
+import { useToast } from "@/hooks/use-toast";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,15 +19,25 @@ import {
     SelectTrigger, 
     SelectValue 
 } from "@/components/ui/select";
-import { ChevronLeft, Save, Sparkles } from "lucide-react";
+import { ChevronLeft, Save, Sparkles, Clock, ImagePlus, X, ImageIcon } from "lucide-react";
+import { uploadImageAction } from "@/app/actions/tickets";
 import Link from "next/link";
+
+import { getServicesAction } from "@/app/actions/services";
+
+import { createTicketAction } from "@/app/actions/tickets";
 
 export default function NewTicketPage() {
     const router = useRouter();
     const supabase = createClient();
+    const { toast } = useToast();
     const [submitting, setSubmitting] = useState(false);
     const [services, setServices] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+
+    // Estado para Imagen
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
 
     const [formData, setFormData] = useState({
         subject: "",
@@ -36,10 +47,10 @@ export default function NewTicketPage() {
 
     useEffect(() => {
         const loadServices = async () => {
-            const { data } = await supabase.from('services').select('*');
-            if (data) {
-                setServices(data);
-                if (data.length > 0) setFormData(prev => ({ ...prev, serviceId: data[0].id }));
+            const result = await getServicesAction();
+            if (result.success && result.data) {
+                setServices(result.data);
+                if (result.data.length > 0) setFormData(prev => ({ ...prev, serviceId: result.data[0].id }));
             }
             setLoading(false);
         };
@@ -49,49 +60,82 @@ export default function NewTicketPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setSubmitting(true);
-        
+
         try {
+            const { data: userData } = await supabase.auth.getUser();
+            if (!userData.user) {
+                toast({ title: "Error", description: "Debes estar autenticado para crear tickets", variant: "destructive" });
+                setSubmitting(false);
+                return;
+            }
+
             const service = services.find(s => s.id === formData.serviceId);
             if (!service) throw new Error("Servicio no válido");
 
+            let uploadedImageUrl = undefined;
+
+            // 1. Subir imagen si existe
+            if (imageFile) {
+                const uploadFormData = new FormData();
+                uploadFormData.append('file', imageFile);
+                const uploadResult = await uploadImageAction(uploadFormData);
+                
+                if (uploadResult.success) {
+                    uploadedImageUrl = uploadResult.url;
+                } else {
+                    toast({ 
+                        title: "Advertencia", 
+                        description: "No se pudo subir la imagen, se creará el ticket sin ella.", 
+                        variant: "destructive" 
+                    });
+                }
+            }
+
+            // 2. Crear Ticket
             const now = new Date();
             const dueAt = new Date(now.getTime() + service.sla_hours * 60 * 60 * 1000);
 
-            const { data: userData } = await supabase.auth.getUser();
-            const userId = userData.user?.id;
-
-            // En un flujo real, el submitter_id vendría del Auth. 
-            // Si no hay user (prototipo sin login real aún), usamos un hardcoded o el primer perfil.
-            let submitterId = userId;
-            if (!submitterId) {
-                const { data: firstProfile } = await supabase.from('profiles').select('id').limit(1).single();
-                submitterId = firstProfile?.id;
-            }
-
-            const { error } = await supabase.from('tickets').insert({
+            const result = await createTicketAction({
                 subject: formData.subject,
                 description: formData.description,
-                status: 'Ingresado',
                 priority: service.priority,
                 category: service.category,
                 service_id: service.id,
-                submitter_id: submitterId,
+                submitter_id: userData.user.id,
                 due_at: dueAt.toISOString(),
-                created_at: now.toISOString(),
-                updated_at: now.toISOString()
+                image_url: uploadedImageUrl
             });
 
-            if (error) throw error;
-
-            // Enviar notificación (Mock API)
-            await sendTicketNotification(formData.subject, "Nuevo requerimiento ingresado al sistema.");
-
-            router.push('/dashboard');
-            router.refresh();
-        } catch (error) {
+            if (result.success) {
+                toast({ title: "Ticket creado", description: "Tu requerimiento ha sido ingresado correctamente." });
+                router.push("/dashboard");
+                router.refresh();
+            } else {
+                toast({ title: "Error", description: result.error, variant: "destructive" });
+                setSubmitting(false);
+            }
+        } catch (error: any) {
             console.error("Error al crear ticket:", error);
+            toast({ title: "Error", description: error.message || "No se pudo crear el ticket", variant: "destructive" });
             setSubmitting(false);
         }
+    };
+
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setImageFile(file);
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setImagePreview(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const removeImage = () => {
+        setImageFile(null);
+        setImagePreview(null);
     };
 
     const currentService = services.find(s => s.id === formData.serviceId);
@@ -169,13 +213,60 @@ export default function NewTicketPage() {
                             )}
                         </div>
 
+                        <div className="space-y-4">
+                            <Label className="text-zinc-300 font-bold block">Adjuntar Evidencia (Foto o Captura)</Label>
+                            
+                            {!imagePreview ? (
+                                <div className="relative">
+                                    <input 
+                                        type="file" 
+                                        accept="image/*" 
+                                        onChange={handleImageChange}
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                    />
+                                    <div className="border-2 border-dashed border-white/10 rounded-xl p-8 flex flex-col items-center justify-center gap-3 bg-white/5 hover:bg-white/10 transition-all group">
+                                        <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                            <ImagePlus className="h-6 w-6 text-primary" />
+                                        </div>
+                                        <div className="text-center">
+                                            <p className="text-sm font-bold text-white">Haz clic o arrastra una imagen</p>
+                                            <p className="text-xs text-zinc-500 mt-1 uppercase tracking-widest font-mono">PNG, JPG hasta 5MB</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="relative rounded-xl overflow-hidden border border-white/10 aspect-video group bg-black/40">
+                                    <img 
+                                        src={imagePreview} 
+                                        alt="Preview" 
+                                        className="w-full h-full object-contain"
+                                    />
+                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <Button 
+                                            type="button"
+                                            variant="destructive" 
+                                            size="sm" 
+                                            onClick={removeImage}
+                                            className="font-bold uppercase tracking-tighter"
+                                        >
+                                            <X className="w-4 h-4 mr-2" /> Eliminar Imagen
+                                        </Button>
+                                    </div>
+                                    <div className="absolute bottom-2 left-2 bg-black/80 backdrop-blur-md px-2 py-1 rounded text-[10px] text-white flex items-center gap-1 border border-white/10 uppercase font-bold tracking-widest">
+                                        <ImageIcon className="w-3 h-3 text-primary" />
+                                        Vista Previa Seleccionada
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         <div className="space-y-2">
                             <Label htmlFor="description" className="text-zinc-300 font-bold">Descripción Detallada <span className="text-primary italic">*</span></Label>
                             <Textarea 
                                 id="description" 
                                 required 
                                 placeholder="Describe el problema, pasos para reproducirlo, equipo afectado, etc..." 
-                                className="min-h-[150px] bg-black/40 border-white/10 text-white focus:border-primary/50 transition-all resize-none p-4"
+                                className="min-h-[120px] bg-black/40 border-white/10 text-white focus:border-primary/50 transition-all resize-none p-4"
                                 value={formData.description}
                                 onChange={(e) => setFormData({...formData, description: e.target.value})}
                             />
