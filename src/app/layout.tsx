@@ -7,8 +7,8 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" });
 
 export const metadata: Metadata = {
-  title: "Gestor UI Premium",
-  description: "Plataforma de gestión multicompañía de última generación",
+  title: "Sistema de gestion para requerimientos",
+  description: "Plataforma de gestión de requerimientos contractuales de última generación",
 };
 
 export default function RootLayout({

@@ -31,10 +31,15 @@ export async function createTicketAction(data: {
             finalDescription += `\n\n[ADJUNTO_IMAGEN]: ${data.image_url}`;
         }
 
-        const { image_url, ...baseData } = data;
+        const { image_url, category, submitter_id, ...baseData } = data; // Extraer 'category' para no incluirla en el insert
+
+        // Obtener el company_id del usuario para asociarlo al ticket
+        const { data: profile } = await supabaseAdmin.from('profiles').select('company_id').eq('id', submitter_id).single();
 
         const { data: ticket, error: ticketError } = await supabaseAdmin.from('tickets').insert([{
             ...baseData,
+            creador_id: submitter_id,
+            company_id: profile?.company_id || null,
             description: finalDescription,
             status: 'Ingresado',
             created_at: now,
@@ -131,8 +136,8 @@ export async function getTicketsAction() {
         const role = profile.role?.trim();
         const empresaId = profile.company_id; // Sincronizado con DB
 
-        // 2. Construir query base
-        let query = supabaseAdmin.from('tickets').select('*');
+        // 2. Construir query base con relación a servicios para obtener la categoría
+        let query = supabaseAdmin.from('tickets').select('*, services(category)');
 
         // 3. Aplicar filtros según el ROL
         if (role === 'Técnico') {
@@ -165,6 +170,7 @@ export async function getTicketsAction() {
             resolvedAt: t.resolved_at ? new Date(t.resolved_at) : null,
             submitterId: t.creador_id || t.submitter_id,
             assigneeId: t.tecnico_asignado_id || t.assignee_id,
+            category: t.services?.category || 'General' // Mapear desde la relación
         }));
 
         return { success: true, data: formattedData };

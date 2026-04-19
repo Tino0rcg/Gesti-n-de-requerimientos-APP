@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { 
@@ -56,7 +56,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 
 export default function UsuariosPage() {
-    const supabase = createClient();
+    const supabase = useMemo(() => createClient(), []);
     const router = useRouter();
     const { toast } = useToast();
     const [userRole, setUserRole] = useState<string | null>(null);
@@ -67,7 +67,7 @@ export default function UsuariosPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [isSheetOpen, setIsSheetOpen] = useState(false);
-    const [isViewSheetOpen, setIsViewSheetOpen] = useState(false);
+    const [sheetMode, setSheetMode] = useState<'create' | 'edit' | 'view'>('create');
     const [editingUser, setEditingUser] = useState<any | null>(null);
     const [viewingUser, setViewingUser] = useState<any | null>(null);
     const [userToDelete, setUserToDelete] = useState<any | null>(null);
@@ -139,6 +139,7 @@ export default function UsuariosPage() {
             rol: "Usuario", 
             password: "" 
         });
+        setSheetMode('create');
         setIsSheetOpen(true);
     };
 
@@ -151,6 +152,7 @@ export default function UsuariosPage() {
             rol: user.role || "Usuario",
             password: "",
         });
+        setSheetMode('edit');
         setIsSheetOpen(true);
     };
 
@@ -164,6 +166,7 @@ export default function UsuariosPage() {
                 result = await updateProfileAction(editingUser.id, {
                     name: formData.nombre,
                     role: formData.rol,
+                    password: formData.password, // Incluir password si se llenó
                     company_id: formData.empresa === "interno" ? undefined : formData.empresa,
                     avatar_url: `/avatars/1.png`
                 });
@@ -225,10 +228,17 @@ export default function UsuariosPage() {
         (u.company_name || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    if (loading || !userRole) return <div className="p-8 text-center text-zinc-500 italic">Validando permisos de directorio corporativo...</div>;
-
     return (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6 relative">
+            {/* Overlay de carga estable si no hay datos */}
+            {(loading && usuarios.length === 0) && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-zinc-950/20 backdrop-blur-sm rounded-xl">
+                    <div className="flex flex-col items-center gap-2">
+                        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                        <p className="text-xs text-zinc-500 italic">Validando directorio...</p>
+                    </div>
+                </div>
+            )}
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight text-white uppercase italic">Gestión de Usuarios</h1>
@@ -310,7 +320,7 @@ export default function UsuariosPage() {
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        <DropdownMenu>
+                                        <DropdownMenu modal={false}>
                                             <DropdownMenuTrigger asChild>
                                                 <Button variant="ghost" size="icon" className="hover:bg-white/10 h-8 w-8">
                                                     <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
@@ -321,18 +331,17 @@ export default function UsuariosPage() {
                                                 <DropdownMenuSeparator className="bg-white/5" />
                                                 <DropdownMenuItem 
                                                     className="gap-2 cursor-pointer" 
-                                                    onSelect={(e) => {
-                                                        e.preventDefault();
+                                                    onSelect={() => {
                                                         setViewingUser(user);
-                                                        setIsViewSheetOpen(true);
+                                                        setSheetMode('view');
+                                                        setIsSheetOpen(true);
                                                     }}
                                                 >
                                                     <Eye className="h-4 w-4" /> Ver Perfil
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem 
                                                     className="gap-2 cursor-pointer" 
-                                                    onSelect={(e) => {
-                                                        e.preventDefault();
+                                                    onSelect={() => {
                                                         handleOpenEdit(user);
                                                     }}
                                                 >
@@ -340,8 +349,7 @@ export default function UsuariosPage() {
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem 
                                                     className="gap-2 cursor-pointer text-red-400 focus:text-red-400 focus:bg-red-400/10" 
-                                                    onSelect={(e) => {
-                                                        e.preventDefault();
+                                                    onSelect={() => {
                                                         setUserToDelete(user);
                                                     }}
                                                 >
@@ -359,203 +367,210 @@ export default function UsuariosPage() {
 
             <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
                 <SheetContent className="glass-panel border-l-primary/20 flex flex-col sm:max-w-md w-full p-0">
-                    <div className="p-6">
-                        <SheetHeader>
-                            <SheetTitle className="text-2xl font-bold text-white leading-none">
-                                {editingUser ? "Editar Usuario" : "Crear Nuevo Acceso"}
-                            </SheetTitle>
-                            <SheetDescription className="text-zinc-500 mt-2">
-                                {editingUser ? "Actualiza los privilegios y datos del perfil." : "Habilita el acceso para un nuevo colaborador o cliente."}
-                            </SheetDescription>
-                        </SheetHeader>
-                    </div>
-                    
-                    <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden px-6">
-                        <div className="space-y-5 flex-1 overflow-y-auto pr-2 custom-scrollbar pb-8">
-                            <div className="space-y-2">
-                                <Label className="text-zinc-400 text-xs">Nombre Completo</Label>
-                                <Input 
-                                    required 
-                                    placeholder="Ej: Roberto Contreras" 
-                                    value={formData.nombre} 
-                                    onChange={e => setFormData({...formData, nombre: e.target.value})} 
-                                    className="bg-white/5 border-white/10 focus:border-primary/50" 
-                                />
+                    {sheetMode === 'view' ? (
+                        <>
+                            <div className="p-6">
+                                <SheetHeader>
+                                    <SheetTitle className="flex items-center gap-2 text-white">
+                                        <UserIcon className="h-5 w-5 text-primary" />
+                                        Perfil de Usuario
+                                    </SheetTitle>
+                                    <SheetDescription>
+                                        Detalle de cuenta y permisos del sistema.
+                                    </SheetDescription>
+                                </SheetHeader>
                             </div>
-                            <div className="space-y-2">
-                                <Label className="text-zinc-400 text-xs">Correo Electrónico</Label>
-                                <Input 
-                                    required 
-                                    type="email" 
-                                    placeholder="usuario@dominio.cl" 
-                                    value={formData.email} 
-                                    onChange={e => setFormData({...formData, email: e.target.value})} 
-                                    className="bg-white/5 border-white/10" 
-                                    disabled={!!editingUser} 
-                                />
-                            </div>
-                            {!editingUser && (
-                                <div className="space-y-2">
-                                    <Label className="text-zinc-400 text-xs text-primary">Contraseña Temporal</Label>
-                                    <Input 
-                                        required 
-                                        type="password" 
-                                        placeholder="••••••••" 
-                                        value={formData.password} 
-                                        onChange={e => setFormData({...formData, password: e.target.value})} 
-                                        className="bg-white/5 border-primary/20 focus:border-primary/50" 
-                                    />
+
+                            {viewingUser && (
+                                <div className="mt-2 space-y-6 flex-1 overflow-y-auto px-6 custom-scrollbar pb-8">
+                                    <div className="flex flex-col items-center justify-center p-6 bg-white/5 rounded-2xl border border-white/10 mb-6 relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 p-4 opacity-5">
+                                            <Shield className="h-24 w-24" />
+                                        </div>
+                                        <Avatar className="h-20 w-20 border-2 border-primary/20 mb-4">
+                                            <AvatarFallback className="bg-primary/10 text-primary text-2xl font-bold uppercase">
+                                                {(viewingUser.name || "U").charAt(0)}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <h3 className="text-xl font-bold text-white tracking-tight">{viewingUser.name}</h3>
+                                        <Badge variant="outline" className="mt-2 bg-primary/20 text-primary border-primary/30 uppercase text-[10px] tracking-widest font-bold px-3">
+                                            {viewingUser.role}
+                                        </Badge>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-1 gap-3">
+                                            <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-1">
+                                                <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                                                    <Mail className="h-3 w-3" /> Correo Electrónico
+                                                </div>
+                                                <p className="text-white text-sm break-all font-mono">{viewingUser.email}</p>
+                                            </div>
+
+                                            <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-1">
+                                                <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                                                    <Building className="h-3 w-3" /> Organización
+                                                </div>
+                                                <p className="text-white text-sm">
+                                                    {viewingUser.company_name || "Staff Interno (Vanguardia)"}
+                                                </p>
+                                            </div>
+
+                                            <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-1">
+                                                <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                                                    <Hash className="h-3 w-3" /> ID Único de Sistema
+                                                </div>
+                                                <p className="text-[10px] text-zinc-400 font-mono italic break-all leading-tight">
+                                                    {viewingUser.id}
+                                                </p>
+                                            </div>
+
+                                            <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-1">
+                                                <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                                                    <Calendar className="h-3 w-3" /> Fecha de Registro
+                                                </div>
+                                                <p className="text-white text-sm">
+                                                    {viewingUser.created_at ? new Date(viewingUser.created_at).toLocaleDateString('es-CL', { 
+                                                        day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                                                    }) : 'Fecha no disponible'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <Separator className="bg-white/5" />
+
+                                    <div className="space-y-4">
+                                        <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Estadísticas de Usuario</h4>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="p-4 bg-white/5 rounded-xl border border-white/5 text-center">
+                                                <p className="text-2xl font-bold text-white">0</p>
+                                                <p className="text-[9px] text-zinc-500 uppercase font-bold">Tickets Creados</p>
+                                            </div>
+                                            <div className="p-4 bg-white/5 rounded-xl border border-white/5 text-center">
+                                                <p className="text-xs font-semibold text-green-400">Activo</p>
+                                                <p className="text-[9px] text-zinc-500 uppercase font-bold">Estado Actual</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
+
+                            <div className="p-6 mt-auto border-t border-white/5">
+                                <Button 
+                                    className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold" 
+                                    onClick={() => setIsSheetOpen(false)}
+                                >
+                                    Cerrar Expediente
+                                </Button>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="p-6">
+                                <SheetHeader>
+                                    <SheetTitle className="text-2xl font-bold text-white leading-none">
+                                        {editingUser ? "Editar Usuario" : "Crear Nuevo Acceso"}
+                                    </SheetTitle>
+                                    <SheetDescription className="text-zinc-500 mt-2">
+                                        {editingUser ? "Actualiza los privilegios y datos del perfil." : "Habilita el acceso para un nuevo colaborador o cliente."}
+                                    </SheetDescription>
+                                </SheetHeader>
+                            </div>
                             
-                            <div className="space-y-2">
-                                <Label className="text-zinc-400 text-xs">Empresa Cliente / Staff</Label>
-                                <Select value={formData.empresa} onValueChange={(v) => setFormData({...formData, empresa: v})}>
-                                    <SelectTrigger className="bg-white/5 border-white/10">
-                                        <SelectValue placeholder="Seleccionar empresa..." />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                        <SelectItem value="interno" disabled={userRole === 'Administrador Cliente'}>
-                                            Sin empresa (Interno)
-                                        </SelectItem>
-                                        {empresas.map(emp => (
-                                            <SelectItem 
-                                                key={emp.id} 
-                                                value={emp.id}
-                                                disabled={(userRole === 'Administrador Cliente') && emp.id !== myCompanyId}
-                                            >
-                                                {emp.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label className="text-zinc-400 text-xs text-primary">Rol en Plataforma</Label>
-                                <Select value={formData.rol} onValueChange={(v) => setFormData({...formData, rol: v})}>
-                                    <SelectTrigger className="bg-white/5 border-primary/20">
-                                        <SelectValue placeholder="Rol de acceso..." />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                        <SelectItem value="Usuario">Cliente Externo (Usuario)</SelectItem>
-                                        <SelectItem value="Administrador Cliente">Administrador de Empresa (Cliente)</SelectItem>
-                                        <SelectItem value="Técnico">Técnico / Soporte (Especialista)</SelectItem>
-                                        <SelectItem value="Administrador Full">Administrador Global (Mesa Ayuda)</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-
-                        <div className="py-6 mt-auto border-t border-white/5 flex gap-3">
-                            <Button type="button" variant="ghost" className="flex-1 hover:bg-white/5" onClick={() => setIsSheetOpen(false)} disabled={isSubmitting}>
-                                Cancelar
-                            </Button>
-                            <Button type="submit" className="flex-1 bg-primary hover:bg-primary/90 text-black font-bold uppercase tracking-wider" disabled={isSubmitting}>
-                                {isSubmitting ? "Procesando..." : (editingUser ? "Guardar" : "Crear Acceso")}
-                            </Button>
-                        </div>
-                    </form>
-                </SheetContent>
-            </Sheet>
-
-            <Sheet open={isViewSheetOpen} onOpenChange={setIsViewSheetOpen}>
-                <SheetContent className="glass-panel border-l-primary/20 flex flex-col sm:max-w-md w-full p-0">
-                    <div className="p-6">
-                        <SheetHeader>
-                            <SheetTitle className="flex items-center gap-2 text-white">
-                                <UserIcon className="h-5 w-5 text-primary" />
-                                Perfil de Usuario
-                            </SheetTitle>
-                            <SheetDescription>
-                                Detalle de cuenta y permisos del sistema.
-                            </SheetDescription>
-                        </SheetHeader>
-                    </div>
-
-                    {viewingUser && (
-                        <div className="mt-2 space-y-6 flex-1 overflow-y-auto px-6 custom-scrollbar pb-8">
-                            <div className="flex flex-col items-center justify-center p-6 bg-white/5 rounded-2xl border border-white/10 mb-6 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-4 opacity-5">
-                                    <Shield className="h-24 w-24" />
-                                </div>
-                                <Avatar className="h-20 w-20 border-2 border-primary/20 mb-4">
-                                    <AvatarFallback className="bg-primary/10 text-primary text-2xl font-bold uppercase">
-                                        {(viewingUser.name || "U").charAt(0)}
-                                    </AvatarFallback>
-                                </Avatar>
-                                <h3 className="text-xl font-bold text-white tracking-tight">{viewingUser.name}</h3>
-                                <Badge variant="outline" className="mt-2 bg-primary/20 text-primary border-primary/30 uppercase text-[10px] tracking-widest font-bold px-3">
-                                    {viewingUser.role}
-                                </Badge>
-                            </div>
-
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-1 gap-3">
-                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-1">
-                                        <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
-                                            <Mail className="h-3 w-3" /> Correo Electrónico
+                            <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden px-6">
+                                <div className="space-y-5 flex-1 overflow-y-auto pr-2 custom-scrollbar pb-8">
+                                    <div className="space-y-2">
+                                        <Label className="text-zinc-400 text-xs">Nombre Completo</Label>
+                                        <Input 
+                                            required 
+                                            placeholder="Ej: Roberto Contreras" 
+                                            value={formData.nombre} 
+                                            onChange={e => setFormData({...formData, nombre: e.target.value})} 
+                                            className="bg-white/5 border-white/10 focus:border-primary/50" 
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-zinc-400 text-xs">Correo Electrónico</Label>
+                                        <Input 
+                                            required 
+                                            type="email" 
+                                            placeholder="usuario@dominio.cl" 
+                                            value={formData.email} 
+                                            onChange={e => setFormData({...formData, email: e.target.value})} 
+                                            className="bg-white/5 border-white/10" 
+                                            disabled={!!editingUser} 
+                                        />
+                                    </div>
+                                    {(!editingUser || userRole === 'Administrador Full') && (
+                                        <div className="space-y-2">
+                                            <Label className="text-zinc-400 text-xs text-primary">
+                                                {editingUser ? "Nueva Contraseña (Opcional)" : "Contraseña Temporal"}
+                                            </Label>
+                                            <Input 
+                                                required={!editingUser}
+                                                type="password" 
+                                                placeholder={editingUser ? "Dejar vacío para mantener actual" : "••••••••"} 
+                                                value={formData.password} 
+                                                onChange={e => setFormData({...formData, password: e.target.value})} 
+                                                className="bg-white/5 border-primary/20 focus:border-primary/50" 
+                                            />
+                                            {editingUser && (
+                                                <p className="text-[10px] text-zinc-500 italic">Sólo visible para Administrador Full.</p>
+                                            )}
                                         </div>
-                                        <p className="text-white text-sm break-all font-mono">{viewingUser.email}</p>
+                                    )}
+                                    
+                                    <div className="space-y-2">
+                                        <Label className="text-zinc-400 text-xs">Empresa Cliente / Staff</Label>
+                                        <Select value={formData.empresa} onValueChange={(v) => setFormData({...formData, empresa: v})}>
+                                            <SelectTrigger className="bg-white/5 border-white/10">
+                                                <SelectValue placeholder="Seleccionar empresa..." />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                                <SelectItem value="interno" disabled={userRole === 'Administrador Cliente'}>
+                                                    Sin empresa (Interno)
+                                                </SelectItem>
+                                                {empresas.map(emp => (
+                                                    <SelectItem 
+                                                        key={emp.id} 
+                                                        value={emp.id}
+                                                        disabled={(userRole === 'Administrador Cliente') && emp.id !== myCompanyId}
+                                                    >
+                                                        {emp.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
 
-                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-1">
-                                        <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
-                                            <Building className="h-3 w-3" /> Organización
-                                        </div>
-                                        <p className="text-white text-sm">
-                                            {viewingUser.company_name || "Staff Interno (Vanguardia)"}
-                                        </p>
-                                    </div>
-
-                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-1">
-                                        <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
-                                            <Hash className="h-3 w-3" /> ID Único de Sistema
-                                        </div>
-                                        <p className="text-[10px] text-zinc-400 font-mono italic break-all leading-tight">
-                                            {viewingUser.id}
-                                        </p>
-                                    </div>
-
-                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-1">
-                                        <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
-                                            <Calendar className="h-3 w-3" /> Fecha de Registro
-                                        </div>
-                                        <p className="text-white text-sm">
-                                            {viewingUser.created_at ? new Date(viewingUser.created_at).toLocaleDateString('es-CL', { 
-                                                day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                                            }) : 'Fecha no disponible'}
-                                        </p>
+                                    <div className="space-y-2">
+                                        <Label className="text-zinc-400 text-xs text-primary">Rol en Plataforma</Label>
+                                        <Select value={formData.rol} onValueChange={(v) => setFormData({...formData, rol: v})}>
+                                            <SelectTrigger className="bg-white/5 border-primary/20">
+                                                <SelectValue placeholder="Rol de acceso..." />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                                <SelectItem value="Usuario">Cliente Externo (Usuario)</SelectItem>
+                                                <SelectItem value="Administrador Cliente">Administrador de Empresa (Cliente)</SelectItem>
+                                                <SelectItem value="Técnico">Técnico / Soporte (Especialista)</SelectItem>
+                                                <SelectItem value="Administrador Full">Administrador Global (Mesa Ayuda)</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 </div>
-                            </div>
 
-                            <Separator className="bg-white/5" />
-
-                            <div className="space-y-4">
-                                <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Estadísticas de Usuario</h4>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5 text-center">
-                                        <p className="text-2xl font-bold text-white">0</p>
-                                        <p className="text-[9px] text-zinc-500 uppercase font-bold">Tickets Creados</p>
-                                    </div>
-                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5 text-center">
-                                        <p className="text-xs font-semibold text-green-400">Activo</p>
-                                        <p className="text-[9px] text-zinc-500 uppercase font-bold">Estado Actual</p>
-                                    </div>
+                                <div className="py-6 mt-auto border-t border-white/5 flex gap-3">
+                                    <Button type="button" variant="ghost" className="flex-1 hover:bg-white/5" onClick={() => setIsSheetOpen(false)} disabled={isSubmitting}>
+                                        Cancelar
+                                    </Button>
+                                    <Button type="submit" className="flex-1 bg-primary hover:bg-primary/90 text-black font-bold uppercase tracking-wider" disabled={isSubmitting}>
+                                        {isSubmitting ? "Procesando..." : (editingUser ? "Guardar" : "Crear Acceso")}
+                                    </Button>
                                 </div>
-                            </div>
-                        </div>
+                            </form>
+                        </>
                     )}
-
-                    <div className="p-6 mt-auto border-t border-white/5">
-                        <Button 
-                            className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold" 
-                            onClick={() => setIsViewSheetOpen(false)}
-                        >
-                            Cerrar Expediente
-                        </Button>
-                    </div>
                 </SheetContent>
             </Sheet>
 

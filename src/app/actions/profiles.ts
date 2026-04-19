@@ -137,6 +137,7 @@ export async function getProfilesAction(roleFilters?: string[]) {
 export async function updateProfileAction(id: string, data: {
   name: string;
   role: string;
+  password?: string;
   company_id?: string;
   specialty?: string;
   status?: string;
@@ -145,6 +146,15 @@ export async function updateProfileAction(id: string, data: {
   try {
     const supabaseAdmin = createAdminClient();
 
+    // 1. Si hay password, actualizar en Auth primero
+    if (data.password && data.password.trim() !== "") {
+      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(id, {
+        password: data.password
+      });
+      if (authError) return { success: false, error: "Auth Update: " + authError.message };
+    }
+
+    // 2. Actualizar metadatos en perfiles
     const { error } = await supabaseAdmin
       .from('profiles')
       .update({
@@ -168,16 +178,47 @@ export async function deleteProfileAction(id: string) {
   try {
     const supabaseAdmin = createAdminClient();
     
-    // 1. Delete Auth User (cascades to profile if DB configured, but we do both to be safe)
-    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(id);
-    if (authError) return { success: false, error: "Auth: " + authError.message };
+    // 1. Anonimizar o limpiar datos relacionados para evitar errores de integridad referencial
+    // Actualizar notas de bitácora
+    await supabaseAdmin
+      .from('notes')
+      .update({ author_id: null })
+      .eq('author_id', id);
 
-    // Profile should be gone via cascade, but verify or manual delete if not
-    await supabaseAdmin.from('profiles').delete().eq('id', id);
+    // Actualizar tickets (creador, asignado, etc)
+    await supabaseAdmin
+      .from('tickets')
+      .update({ 
+        creador_id: null,
+        submitter_id: null,
+        tecnico_asignado_id: null,
+        assignee_id: null
+      })
+      .or(`creador_id.eq.${id},submitter_id.eq.${id},tecnico_asignado_id.eq.${id},assignee_id.eq.${id}`);
+
+    // 2. Eliminar de Auth (esto debería disparar el borrado del perfil si hay cascade, o lo hacemos manual)
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(id);
+    
+    if (authError) {
+      // Si el error es que el usuario ya no existe en Auth, procedemos a borrar el perfil manual
+      if (!authError.message.includes("User not found")) {
+        return { success: false, error: "Error de Autenticación: " + authError.message };
+      }
+    }
+
+    // 3. Borrado definitivo del perfil (por si no hubo cascade)
+    const { error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .delete()
+      .eq('id', id);
+
+    if (profileError) {
+      return { success: false, error: "Error de Base de Datos al remover perfil: " + profileError.message };
+    }
 
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: "Error Crítico: " + (error.message || "Fallo en la operación de borrado") };
   }
 }
 

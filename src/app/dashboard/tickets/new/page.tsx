@@ -40,7 +40,6 @@ export default function NewTicketPage() {
     const [imagePreview, setImagePreview] = useState<string | null>(null);
 
     const [formData, setFormData] = useState({
-        subject: "",
         serviceId: "",
         description: "",
     });
@@ -85,7 +84,7 @@ export default function NewTicketPage() {
                 } else {
                     toast({ 
                         title: "Advertencia", 
-                        description: "No se pudo subir la imagen, se creará el ticket sin ella.", 
+                        description: `No se pudo subir la imagen (${uploadResult.error}). Se creará el ticket sin ella.`, 
                         variant: "destructive" 
                     });
                 }
@@ -96,7 +95,7 @@ export default function NewTicketPage() {
             const dueAt = new Date(now.getTime() + service.sla_hours * 60 * 60 * 1000);
 
             const result = await createTicketAction({
-                subject: formData.subject,
+                subject: service.name,
                 description: formData.description,
                 priority: service.priority,
                 category: service.category,
@@ -169,18 +168,6 @@ export default function NewTicketPage() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
-                        <div className="space-y-2">
-                            <Label htmlFor="subject" className="text-zinc-300 font-bold">Asunto principal <span className="text-primary italic">*</span></Label>
-                            <Input 
-                                id="subject" 
-                                required 
-                                placeholder="Ej: Falla en servidor principal, Pantalla azul..." 
-                                className="bg-black/40 border-white/10 text-white focus:border-primary/50 transition-all h-11"
-                                value={formData.subject}
-                                onChange={(e) => setFormData({...formData, subject: e.target.value})}
-                            />
-                        </div>
-
                         <div className="space-y-2">
                             <Label className="text-zinc-300 font-bold">Servicio Afectado (Catálogo Contractual)</Label>
                             <Select value={formData.serviceId} onValueChange={(v) => setFormData({...formData, serviceId: v})}>

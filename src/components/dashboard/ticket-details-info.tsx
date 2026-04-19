@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { format } from "date-fns";
 import { SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageSquare, Clock, UserIcon, AlertCircle, Play, CheckCircle2, XCircle, Send, UserCheck, Loader2, Sparkles } from "lucide-react";
+import { MessageSquare, Clock, UserIcon, AlertCircle, Play, CheckCircle2, XCircle, Send, UserCheck, Loader2, Sparkles, Timer } from "lucide-react";
 import { getSlaStatus } from "@/lib/sla-utils";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -48,6 +48,51 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
   const [loading, setLoading] = useState(true);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [timeLeftStr, setTimeLeftStr] = useState<string>("");
+  const [isOverdueSla, setIsOverdueSla] = useState<boolean>(false);
+  const [currentUserProfile, setCurrentUserProfile] = useState<User | null>(null);
+
+  useEffect(() => {
+    if (!ticket) return;
+
+    const calculate = () => {
+        let referenceTime: Date;
+        if (ticket.status === 'Terminado') {
+            referenceTime = ticket.resolvedAt || ticket.updatedAt;
+        } else if (ticket.status === 'Espera de aprobación') {
+            referenceTime = ticket.updatedAt;
+        } else {
+            referenceTime = new Date();
+        }
+
+        const dueTime = ticket.dueAt.getTime();
+        const refTime = referenceTime.getTime();
+        const diff = dueTime - refTime;
+        
+        setIsOverdueSla(diff < 0);
+        
+        const absDiff = Math.abs(diff);
+        const hours = Math.floor(absDiff / (1000 * 60 * 60));
+        const mins = Math.floor((absDiff % (1000 * 60 * 60)) / (1000 * 60));
+        const secs = Math.floor((absDiff % (1000 * 60)) / 1000);
+
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        const timeString = `${pad(hours)}:${pad(mins)}:${pad(secs)}`;
+
+        if (ticket.status === 'Terminado' || ticket.status === 'Espera de aprobación') {
+            setTimeLeftStr(diff >= 0 ? `Pausado (+${timeString})` : `Pausado (-${timeString})`);
+        } else {
+            setTimeLeftStr(diff >= 0 ? `Quedan ${timeString}` : `Vencido (-${timeString})`);
+        }
+    };
+
+    calculate();
+    
+    if (ticket.status === 'Ingresado' || ticket.status === 'En proceso') {
+        const interval = setInterval(calculate, 1000);
+        return () => clearInterval(interval);
+    }
+  }, [ticket, ticket?.status, ticket?.updatedAt, ticket?.resolvedAt, ticket?.dueAt]);
 
   async function fetchData() {
     try {
@@ -62,15 +107,21 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
                 updatedAt: new Date(ticketData.updated_at),
                 dueAt: new Date(ticketData.due_at),
                 resolvedAt: ticketData.resolved_at ? new Date(ticketData.resolved_at) : null,
-                submitterId: ticketData.submitter_id,
-                assigneeId: ticketData.assignee_id,
+                submitterId: ticketData.creador_id || ticketData.submitter_id,
+                assigneeId: ticketData.tecnico_asignado_id || ticketData.assignee_id,
             });
         }
 
         // 2. Perfiles (Usa acción de servidor para bypass RLS)
         const result = await getProfilesAction();
         if (result.success && result.data) {
-            setProfiles(result.data as User[]);
+            const loadedProfiles = result.data as User[];
+            setProfiles(loadedProfiles);
+            const { data: userData } = await supabase.auth.getUser();
+            if (userData.user) {
+                const curUsr = loadedProfiles.find(u => u.id === userData.user.id);
+                setCurrentUserProfile(curUsr || null);
+            }
         }
 
         // 3. Notas (Usa acción de servidor para bypass RLS)
@@ -138,7 +189,7 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
 
   const handleReassign = async (newAssigneeId: string) => {
     const result = await updateTicketAction(ticketId, { 
-        assignee_id: newAssigneeId
+        tecnico_asignado_id: newAssigneeId
     });
 
     if (result.success) {
@@ -190,9 +241,17 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
             <Badge variant="outline" className={`text-xs ${statusColorMap[ticket.status]}`}>{ticket.status}</Badge>
             <Badge variant="outline" className={priorityColorMap[ticket.priority]}>{ticket.priority}</Badge>
             
-            <div className={`flex items-center gap-1.5 ml-auto px-2 py-0.5 rounded-full bg-muted/20 border border-border/50`}>
-                <div title={sla.label} className={`h-2 w-2 rounded-full ${sla.color}`} />
-                <span className="text-[10px] uppercase font-bold tracking-wider">{sla.label}</span>
+            <div className={`flex flex-col items-end gap-1 ml-auto`}>
+                <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-muted/20 border border-border/50`}>
+                    <div title={sla.label} className={`h-2 w-2 rounded-full ${sla.color}`} />
+                    <span className="text-[10px] uppercase font-bold tracking-wider">{sla.label}</span>
+                </div>
+                {timeLeftStr && (
+                    <span className={`flex items-center text-[10px] font-mono font-bold tracking-wider px-2 py-0.5 rounded border border-white/5 bg-black/40 ${isOverdueSla ? 'text-red-400' : 'text-primary'}`}>
+                        <Timer className={`w-3 h-3 mr-1 ${(ticket.status === 'Ingresado' || ticket.status === 'En proceso') ? 'animate-pulse' : ''}`} />
+                        {timeLeftStr}
+                    </span>
+                )}
             </div>
         </div>
         <SheetTitle className="text-xl font-bold leading-tight text-white">{ticket.subject}</SheetTitle>
@@ -202,8 +261,16 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
                 <span className="text-white font-bold">{submitter?.name || "Desconocido"}</span>
             </div>
             <div className="flex items-center gap-2 text-xs">
+                <span className="text-zinc-500 font-medium">Correo:</span>
+                <span className="text-zinc-300">{submitter?.email || "-"}</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
                 <span className="text-zinc-500 font-medium">Empresa:</span>
                 <span className="text-primary font-black tracking-tight italic uppercase">{submitter?.empresa || "Externo"}</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs pt-2 border-t border-white/5 mt-1">
+                <span className="text-zinc-500 font-medium">Resp. Técnico:</span>
+                <span className={`${assignee ? 'text-white font-bold' : 'text-zinc-500 italic'}`}>{assignee?.name || "Sin Asignar"}</span>
             </div>
         </div>
         <div className="flex items-center text-[10px] text-muted-foreground mt-3 gap-3 opacity-70">
@@ -271,19 +338,19 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
       <div className="mb-6 flex-none bg-gradient-to-r from-muted/20 to-muted/5 border border-white/10 rounded-xl p-4">
         <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Flujo de Trabajo Operativo</h4>
         <div className="flex flex-wrap gap-2">
-            {ticket.status === 'Ingresado' && (
+            {ticket.status === 'Ingresado' && (currentUserProfile?.role === 'Técnico' || currentUserProfile?.role === 'Administrador Full') && (
                 <Button onClick={() => handleAction('En proceso', 'Ticket marcado como "En Proceso" por el técnico. Comenzando a trabajar en la solución.')} size="sm" className="bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 border border-cyan-500/30">
                     <Play className="w-4 h-4 mr-2" /> Iniciar Trabajo (Agente)
                 </Button>
             )}
             
-            {ticket.status === 'En proceso' && (
+            {ticket.status === 'En proceso' && (currentUserProfile?.role === 'Técnico' || currentUserProfile?.role === 'Administrador Full') && (
                 <Button onClick={() => handleAction('Espera de aprobación', 'Trabajo finalizado por el técnico. Enviado al cliente para revisión y control de calidad.')} size="sm" className="bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 border border-yellow-500/30">
                     <AlertCircle className="w-4 h-4 mr-2" /> Enviar a Revisión (Al Cliente)
                 </Button>
             )}
 
-            {ticket.status === 'Espera de aprobación' && (
+            {ticket.status === 'Espera de aprobación' && (currentUserProfile?.role !== 'Técnico') && (
                 <>
                     <Button onClick={() => handleAction('Terminado', 'Solución validada y aceptada por el cliente. Ticket cerrado exitosamente.')} size="sm" className="bg-green-500/20 text-green-400 hover:bg-green-500/30 border border-green-500/30">
                         <CheckCircle2 className="w-4 h-4 mr-2" /> Aprobar Solución
@@ -318,6 +385,7 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
       </div>
 
       {/* Panel de Asignación (Admin Only UI) */}
+      {currentUserProfile?.role === 'Administrador Full' && (
       <div className="mb-6 flex-none bg-blue-500/5 border border-blue-500/20 rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
             <h4 className="text-[11px] font-bold uppercase tracking-widest text-blue-400">Control de Asignación</h4>
@@ -355,6 +423,7 @@ export function TicketDetailsInfo({ ticketId, onUpdate }: Props) {
             </div>
         </div>
       </div>
+      )}
 
       <ScrollArea className="flex-1 pr-4 mb-4">
         {/* Descripcion Completa */}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { 
@@ -63,7 +63,7 @@ const iconMap: Record<string, any> = {
 };
 
 export default function ServiciosPage() {
-    const supabase = createClient();
+    const supabase = useMemo(() => createClient(), []);
     const router = useRouter();
     const { toast } = useToast();
     const [userRole, setUserRole] = useState<string | null>(null);
@@ -71,7 +71,7 @@ export default function ServiciosPage() {
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSheetOpen, setIsSheetOpen] = useState(false);
-    const [isViewSheetOpen, setIsViewSheetOpen] = useState(false);
+    const [sheetMode, setSheetMode] = useState<'create' | 'edit' | 'view'>('create');
     const [editingService, setEditingService] = useState<any | null>(null);
     const [viewingService, setViewingService] = useState<any | null>(null);
     const [serviceToDelete, setServiceToDelete] = useState<any | null>(null);
@@ -124,6 +124,7 @@ export default function ServiciosPage() {
     const handleOpenCreate = () => {
         setEditingService(null);
         setFormData({ nombre: "", category: "Software", slaHours: "48" });
+        setSheetMode('create');
         setIsSheetOpen(true);
     };
 
@@ -134,6 +135,7 @@ export default function ServiciosPage() {
             category: srv.category,
             slaHours: srv.sla_hours.toString(),
         });
+        setSheetMode('edit');
         setIsSheetOpen(true);
     };
 
@@ -211,10 +213,19 @@ export default function ServiciosPage() {
         }
     };
 
-    if (loading || !userRole) return <div className="p-8 text-center text-zinc-500 italic">Validando seguridad de catálogo ANS...</div>;
+    if (!userRole && !loading) return <div className="p-8 text-center text-red-500 italic">Acceso denegado.</div>;
 
     return (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6 relative">
+            {/* Overlay de carga estable */}
+            {(loading && catalog.length === 0) && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-zinc-950/20 backdrop-blur-sm rounded-xl">
+                    <div className="flex flex-col items-center gap-2">
+                        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                        <p className="text-xs text-zinc-500 italic">Consultando catálogo maestro...</p>
+                    </div>
+                </div>
+            )}
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight text-white uppercase italic">Catálogo de Servicios</h1>
@@ -245,7 +256,7 @@ export default function ServiciosPage() {
                                         {srv.priority}
                                     </Badge>
                                     
-                                    <DropdownMenu>
+                                    <DropdownMenu modal={false}>
                                         <DropdownMenuTrigger asChild>
                                             <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-white">
                                                 <MoreVertical className="h-4 w-4" />
@@ -256,18 +267,17 @@ export default function ServiciosPage() {
                                             <DropdownMenuSeparator className="bg-white/5" />
                                             <DropdownMenuItem 
                                                 className="gap-2 cursor-pointer" 
-                                                onSelect={(e) => {
-                                                    e.preventDefault();
+                                                onSelect={() => {
                                                     setViewingService(srv); 
-                                                    setIsViewSheetOpen(true);
+                                                    setSheetMode('view');
+                                                    setIsSheetOpen(true);
                                                 }}
                                             >
                                                 <Eye className="h-4 w-4" /> Ver Detalles
                                             </DropdownMenuItem>
                                             <DropdownMenuItem 
                                                 className="gap-2 cursor-pointer" 
-                                                onSelect={(e) => {
-                                                    e.preventDefault();
+                                                onSelect={() => {
                                                     handleOpenEdit(srv);
                                                 }}
                                             >
@@ -275,8 +285,7 @@ export default function ServiciosPage() {
                                             </DropdownMenuItem>
                                             <DropdownMenuItem 
                                                 className="gap-2 cursor-pointer text-red-400 focus:text-red-400 focus:bg-red-400/10" 
-                                                onSelect={(e) => {
-                                                    e.preventDefault();
+                                                onSelect={() => {
                                                     setServiceToDelete(srv);
                                                 }}
                                             >
@@ -309,158 +318,162 @@ export default function ServiciosPage() {
             </div>
 
             <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-                <SheetContent className="glass-panel border-l-primary/20 flex flex-col sm:max-w-md w-full">
-                    <SheetHeader>
-                        <SheetTitle>{editingService ? "Editar Servicio" : "Crear Nuevo Servicio"}</SheetTitle>
-                        <SheetDescription>
-                            {editingService ? "Modifica los parámetros del catálogo." : "Define un nuevo entregable para tus clientes. El sistema aplicará este SLA automáticamente."}
-                        </SheetDescription>
-                    </SheetHeader>
-                    
-                    <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden mt-6">
-                        <div className="space-y-4 flex-1 overflow-y-auto pr-4 custom-scrollbar pb-6">
-                            <div className="space-y-2">
-                                <Label>Nombre del Servicio / Ítem</Label>
-                                <Input 
-                                    required 
-                                    placeholder="Ej: Mantenimiento Preventivo Mensual" 
-                                    value={formData.nombre} 
-                                    onChange={e => setFormData({...formData, nombre: e.target.value})} 
-                                    className="bg-black/20 border-white/10" 
-                                />
+                <SheetContent className="glass-panel border-l-primary/20 flex flex-col sm:max-w-md w-full p-0">
+                    {sheetMode === 'view' ? (
+                        <>
+                            <div className="p-6">
+                                <SheetHeader>
+                                    <SheetTitle className="flex items-center gap-2 text-white">
+                                        <Zap className="h-5 w-5 text-primary" />
+                                        Detalles del Servicio
+                                    </SheetTitle>
+                                    <SheetDescription>
+                                        Especificaciones técnicas y tiempos de respuesta.
+                                    </SheetDescription>
+                                </SheetHeader>
+                            </div>
+
+                            {viewingService && (
+                                <div className="mt-2 space-y-6 flex-1 overflow-y-auto px-6 custom-scrollbar pb-8">
+                                    <div className="flex flex-col items-center justify-center p-8 bg-white/5 rounded-2xl border border-white/10 mb-6 relative overflow-hidden text-center">
+                                        <div className="p-4 bg-primary/10 rounded-full border border-primary/20 mb-4">
+                                            {iconMap[viewingService.category] || <Settings className="h-10 w-10 text-primary" />}
+                                        </div>
+                                        <h3 className="text-xl font-bold text-white tracking-tight">{viewingService.name}</h3>
+                                        <Badge variant="outline" className="mt-3 bg-zinc-800 text-zinc-400 border-zinc-700 uppercase text-[9px] tracking-[0.2em] font-bold">
+                                            Categoría: {viewingService.category}
+                                        </Badge>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-1 gap-3">
+                                            <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-2">
+                                                <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                                                    <Clock className="h-3 w-3" /> Compromiso de Respuesta (SLA)
+                                                </div>
+                                                <div className="flex items-center justify-between">
+                                                    <p className="text-white font-bold">{viewingService.sla_hours} Horas Hábiles</p>
+                                                    <Badge className="bg-primary/20 text-primary border-primary/30">
+                                                        {viewingService.priority}
+                                                    </Badge>
+                                                </div>
+                                            </div>
+
+                                            <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-2">
+                                                <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                                                    <Info className="h-3 w-3" /> Descripción del Servicio
+                                                </div>
+                                                <p className="text-zinc-300 text-sm leading-relaxed">
+                                                    Soporte técnico especializado para la gestión y mantenimiento de {viewingService.name.toLowerCase()}.
+                                                </p>
+                                            </div>
+
+                                            <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-2">
+                                                <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                                                    <History className="h-3 w-3" /> Historial Operativo
+                                                </div>
+                                                <p className="text-white text-sm">
+                                                    Vigente desde el {new Date(viewingService.created_at).toLocaleDateString('es-CL')}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <Separator className="bg-white/5" />
+
+                                    <div className="bg-primary/5 border border-primary/10 rounded-xl p-4">
+                                        <div className="flex gap-4">
+                                            <div className="h-10 w-10 shrink-0 rounded-full bg-primary/20 flex items-center justify-center">
+                                                <Shield className="h-5 w-5 text-primary" />
+                                            </div>
+                                            <div>
+                                                <h5 className="text-sm font-bold text-white">Garantía de Servicio</h5>
+                                                <p className="text-[11px] text-zinc-400 mt-1 leading-relaxed">
+                                                    Este servicio cumple con los estándares corporativos de calidad y tiempos de resolución definidos en el contrato marco.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="p-6 mt-auto border-t border-white/5">
+                                <Button 
+                                    className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold" 
+                                    onClick={() => setIsSheetOpen(false)}
+                                >
+                                    Cerrar Expediente
+                                </Button>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="p-6">
+                                <SheetHeader>
+                                    <SheetTitle className="text-white">{editingService ? "Editar Servicio" : "Crear Nuevo Servicio"}</SheetTitle>
+                                    <SheetDescription>
+                                        {editingService ? "Modifica los parámetros del catálogo." : "Define un nuevo entregable para tus clientes. El sistema aplicará este SLA automáticamente."}
+                                    </SheetDescription>
+                                </SheetHeader>
                             </div>
                             
-                            <div className="space-y-2">
-                                <Label>Categoría Técnica</Label>
-                                <Select value={formData.category} onValueChange={(v) => setFormData({...formData, category: v})}>
-                                    <SelectTrigger className="bg-black/20 border-white/10">
-                                        <SelectValue placeholder="Categoría..." />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                        <SelectItem value="Hardware">Hardware e Infraestructura</SelectItem>
-                                        <SelectItem value="Software">Software y Aplicaciones</SelectItem>
-                                        <SelectItem value="Redes">Telecomunicaciones y Redes</SelectItem>
-                                        <SelectItem value="Accesos">Accesos y Ciberseguridad</SelectItem>
-                                        <SelectItem value="Otro">Soporte General</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>TLA / SLA Objetivo</Label>
-                                <Select value={formData.slaHours} onValueChange={(v) => setFormData({...formData, slaHours: v})}>
-                                    <SelectTrigger className="bg-black/20 border-white/10">
-                                        <SelectValue placeholder="SLA..." />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                        <SelectItem value="4">4 Horas (Crítico / Emergencia)</SelectItem>
-                                        <SelectItem value="12">12 Horas (Alta Prioridad)</SelectItem>
-                                        <SelectItem value="48">48 Horas (Planificado / Media)</SelectItem>
-                                        <SelectItem value="72">72 Horas (Bajo impacto)</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <p className="text-[10px] text-muted-foreground mt-2 italic">
-                                    Nota: La prioridad (Crítica, Alta, etc.) se infiere según las horas de SLA seleccionadas.
-                                </p>
-                            </div>
-                        </div>
-
-                        <SheetFooter className="mt-auto pt-6 pb-2 border-t border-white/10">
-                            <Button type="button" variant="ghost" onClick={() => setIsSheetOpen(false)} disabled={isSubmitting}>Cancelar</Button>
-                            <Button type="submit" className="bg-primary hover:bg-primary/90 text-black font-bold" disabled={isSubmitting}>
-                                {isSubmitting ? "Procesando..." : (editingService ? "Guardar Cambios" : "Registrar en Catálogo")}
-                            </Button>
-                        </SheetFooter>
-                    </form>
-                </SheetContent>
-            </Sheet>
-
-            <Sheet open={isViewSheetOpen} onOpenChange={setIsViewSheetOpen}>
-                <SheetContent className="glass-panel border-l-primary/20 flex flex-col sm:max-w-md w-full p-0">
-                    <div className="p-6">
-                        <SheetHeader>
-                            <SheetTitle className="flex items-center gap-2 text-white">
-                                <Zap className="h-5 w-5 text-primary" />
-                                Detalles del Servicio
-                            </SheetTitle>
-                            <SheetDescription>
-                                Especificaciones técnicas y tiempos de respuesta.
-                            </SheetDescription>
-                        </SheetHeader>
-                    </div>
-
-                    {viewingService && (
-                        <div className="mt-2 space-y-6 flex-1 overflow-y-auto px-6 custom-scrollbar pb-8">
-                            <div className="flex flex-col items-center justify-center p-8 bg-white/5 rounded-2xl border border-white/10 mb-6 relative overflow-hidden text-center">
-                                <div className="p-4 bg-primary/10 rounded-full border border-primary/20 mb-4">
-                                    {iconMap[viewingService.category] || <Settings className="h-10 w-10 text-primary" />}
-                                </div>
-                                <h3 className="text-xl font-bold text-white tracking-tight">{viewingService.name}</h3>
-                                <Badge variant="outline" className="mt-3 bg-zinc-800 text-zinc-400 border-zinc-700 uppercase text-[9px] tracking-[0.2em] font-bold">
-                                    Categoría: {viewingService.category}
-                                </Badge>
-                            </div>
-
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-1 gap-3">
-                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-2">
-                                        <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
-                                            <Clock className="h-3 w-3" /> Compromiso de Respuesta (SLA)
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <p className="text-white font-bold">{viewingService.sla_hours} Horas Hábiles</p>
-                                            <Badge className="bg-primary/20 text-primary border-primary/30">
-                                                {viewingService.priority}
-                                            </Badge>
-                                        </div>
+                            <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden px-6 mt-2">
+                                <div className="space-y-4 flex-1 overflow-y-auto pr-2 custom-scrollbar pb-6">
+                                    <div className="space-y-2">
+                                        <Label className="text-zinc-400 text-xs">Nombre del Servicio / Ítem</Label>
+                                        <Input 
+                                            required 
+                                            placeholder="Ej: Mantenimiento Preventivo Mensual" 
+                                            value={formData.nombre} 
+                                            onChange={e => setFormData({...formData, nombre: e.target.value})} 
+                                            className="bg-white/5 border-white/10" 
+                                        />
+                                    </div>
+                                    
+                                    <div className="space-y-2">
+                                        <Label className="text-zinc-400 text-xs">Categoría Técnica</Label>
+                                        <Select value={formData.category} onValueChange={(v) => setFormData({...formData, category: v})}>
+                                            <SelectTrigger className="bg-white/5 border-white/10">
+                                                <SelectValue placeholder="Categoría..." />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                                <SelectItem value="Hardware">Hardware e Infraestructura</SelectItem>
+                                                <SelectItem value="Software">Software y Aplicaciones</SelectItem>
+                                                <SelectItem value="Redes">Telecomunicaciones y Redes</SelectItem>
+                                                <SelectItem value="Accesos">Accesos y Ciberseguridad</SelectItem>
+                                                <SelectItem value="Otro">Soporte General</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
 
-                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-2">
-                                        <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
-                                            <Info className="h-3 w-3" /> Descripción del Servicio
-                                        </div>
-                                        <p className="text-zinc-300 text-sm leading-relaxed">
-                                            Soporte técnico especializado para la gestión y mantenimiento de {viewingService.name.toLowerCase()}.
-                                        </p>
-                                    </div>
-
-                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-2">
-                                        <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
-                                            <History className="h-3 w-3" /> Historial Operativo
-                                        </div>
-                                        <p className="text-white text-sm">
-                                            Vigente desde el {new Date(viewingService.created_at).toLocaleDateString('es-CL')}
+                                    <div className="space-y-2">
+                                        <Label className="text-zinc-400 text-xs">TLA / SLA Objetivo</Label>
+                                        <Select value={formData.slaHours} onValueChange={(v) => setFormData({...formData, slaHours: v})}>
+                                            <SelectTrigger className="bg-white/5 border-white/10">
+                                                <SelectValue placeholder="SLA..." />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                                <SelectItem value="4">4 Horas (Crítico / Emergencia)</SelectItem>
+                                                <SelectItem value="12">12 Horas (Alta Prioridad)</SelectItem>
+                                                <SelectItem value="48">48 Horas (Planificado / Media)</SelectItem>
+                                                <SelectItem value="72">72 Horas (Bajo impacto)</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <p className="text-[10px] text-muted-foreground mt-2 italic text-zinc-500">
+                                            Nota: La prioridad (Crítica, Alta, etc.) se infiere según las horas de SLA seleccionadas.
                                         </p>
                                     </div>
                                 </div>
-                            </div>
 
-                            <Separator className="bg-white/5" />
-
-                            <div className="bg-primary/5 border border-primary/10 rounded-xl p-4">
-                                <div className="flex gap-4">
-                                    <div className="h-10 w-10 shrink-0 rounded-full bg-primary/20 flex items-center justify-center">
-                                        <Shield className="h-5 w-5 text-primary" />
-                                    </div>
-                                    <div>
-                                        <h5 className="text-sm font-bold text-white">Garantía de Servicio</h5>
-                                        <p className="text-[11px] text-zinc-400 mt-1 leading-relaxed">
-                                            Este servicio cumple con los estándares corporativos de calidad y tiempos de resolución definidos en el contrato marco.
-                                        </p>
-                                    </div>
+                                <div className="mt-auto py-6 border-t border-white/5 flex gap-3">
+                                    <Button type="button" variant="ghost" className="flex-1 hover:bg-white/5" onClick={() => setIsSheetOpen(false)} disabled={isSubmitting}>Cancelar</Button>
+                                    <Button type="submit" className="flex-1 bg-primary hover:bg-primary/90 text-black font-bold uppercase tracking-wider" disabled={isSubmitting}>
+                                        {isSubmitting ? "Procesando..." : (editingService ? "Guardar" : "Registrar")}
+                                    </Button>
                                 </div>
-                            </div>
-                        </div>
+                            </form>
+                        </>
                     )}
-
-                    <div className="p-6 mt-auto border-t border-white/5">
-                        <Button 
-                            className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold" 
-                            onClick={() => setIsViewSheetOpen(false)}
-                        >
-                            Cerrar Catálogo
-                        </Button>
-                    </div>
                 </SheetContent>
             </Sheet>
 

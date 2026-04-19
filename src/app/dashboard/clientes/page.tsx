@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { 
@@ -51,7 +51,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 
 export default function ClientesPage() {
-    const supabase = createClient();
+    const supabase = useMemo(() => createClient(), []);
     const router = useRouter();
     const { toast } = useToast();
     const [userRole, setUserRole] = useState<string | null>(null);
@@ -60,7 +60,7 @@ export default function ClientesPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [isSheetOpen, setIsSheetOpen] = useState(false);
-    const [isViewSheetOpen, setIsViewSheetOpen] = useState(false);
+    const [sheetMode, setSheetMode] = useState<'create' | 'edit' | 'view'>('create');
     const [editingCompany, setEditingCompany] = useState<any | null>(null);
     const [viewingCompany, setViewingCompany] = useState<any | null>(null);
     const [companyToDelete, setCompanyToDelete] = useState<any | null>(null);
@@ -114,6 +114,7 @@ export default function ClientesPage() {
     const handleOpenCreate = () => {
         setEditingCompany(null);
         setFormData({ nombre: "", rut: "", plan: "Pro", status: "Activo" });
+        setSheetMode('create');
         setIsSheetOpen(true);
     };
 
@@ -125,6 +126,7 @@ export default function ClientesPage() {
             plan: company.plan,
             status: company.status,
         });
+        setSheetMode('edit');
         setIsSheetOpen(true);
     };
 
@@ -200,10 +202,17 @@ export default function ClientesPage() {
         (emp.rut || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    if (loading || !userRole) return <div className="p-8 text-center text-zinc-500 italic">Verificando credenciales corporativas...</div>;
-
     return (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6 relative">
+            {/* Overlay de carga estable */}
+            {(loading && empresas.length === 0) && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-zinc-950/20 backdrop-blur-sm rounded-xl">
+                    <div className="flex flex-col items-center gap-2">
+                        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                        <p className="text-xs text-zinc-500 italic">Cargando directorio de empresas...</p>
+                    </div>
+                </div>
+            )}
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight text-white">Clientes y Empresas</h1>
@@ -271,7 +280,7 @@ export default function ClientesPage() {
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        <DropdownMenu>
+                                        <DropdownMenu modal={false}>
                                             <DropdownMenuTrigger asChild>
                                                 <Button variant="ghost" size="icon" className="hover:bg-white/10">
                                                     <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
@@ -282,18 +291,17 @@ export default function ClientesPage() {
                                                 <DropdownMenuSeparator className="bg-white/5" />
                                                 <DropdownMenuItem 
                                                     className="gap-2 cursor-pointer" 
-                                                    onSelect={(e) => {
-                                                        e.preventDefault();
+                                                    onSelect={() => {
                                                         setViewingCompany(empresa);
-                                                        setIsViewSheetOpen(true);
+                                                        setSheetMode('view');
+                                                        setIsSheetOpen(true);
                                                     }}
                                                 >
                                                     <Eye className="h-4 w-4" /> Ver Perfil
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem 
                                                     className="gap-2 cursor-pointer" 
-                                                    onSelect={(e) => {
-                                                        e.preventDefault();
+                                                    onSelect={() => {
                                                         handleOpenEdit(empresa);
                                                     }}
                                                 >
@@ -301,8 +309,7 @@ export default function ClientesPage() {
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem 
                                                     className="gap-2 cursor-pointer text-red-400 focus:text-red-400 focus:bg-red-400/10" 
-                                                    onSelect={(e) => {
-                                                        e.preventDefault();
+                                                    onSelect={() => {
                                                         setCompanyToDelete(empresa);
                                                     }}
                                                 >
@@ -319,167 +326,173 @@ export default function ClientesPage() {
             </Card>
 
             <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-                <SheetContent className="glass-panel border-l-primary/20 flex flex-col sm:max-w-md w-full">
-                    <SheetHeader>
-                        <SheetTitle>{editingCompany ? "Editar Empresa" : "Registrar Empresa"}</SheetTitle>
-                        <SheetDescription>
-                            {editingCompany ? "Modifica los datos de la organización." : "Al registrar una empresa, se habilita automáticamente el acceso para sus colaboradores."}
-                        </SheetDescription>
-                    </SheetHeader>
-                    
-                    <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden mt-6">
-                        <div className="space-y-4 flex-1 overflow-y-auto pr-4 custom-scrollbar pb-6">
-                            <div className="space-y-2">
-                                <Label>Nombre de la Organización</Label>
-                                <Input 
-                                    required 
-                                    placeholder="Ej: Corporación Delta S.A." 
-                                    value={formData.nombre} 
-                                    onChange={e => setFormData({...formData, nombre: e.target.value})} 
-                                    className="bg-black/20 border-white/10" 
-                                />
+                <SheetContent className="glass-panel border-l-primary/20 flex flex-col sm:max-w-md w-full p-0">
+                    {sheetMode === 'view' ? (
+                        <>
+                            <div className="p-6">
+                                <SheetHeader>
+                                    <SheetTitle className="flex items-center gap-2 text-white">
+                                        <Building2 className="h-5 w-5 text-primary" />
+                                        Detalles de la Empresa
+                                    </SheetTitle>
+                                    <SheetDescription>
+                                        Vista de solo lectura del perfil corporativo.
+                                    </SheetDescription>
+                                </SheetHeader>
                             </div>
 
-                            <div className="space-y-2">
-                                <Label>RUT / Identificador Fiscal</Label>
-                                <Input 
-                                    required 
-                                    placeholder="76.xxx.xxx-x" 
-                                    value={formData.rut} 
-                                    onChange={e => setFormData({...formData, rut: e.target.value})} 
-                                    className="bg-black/20 border-white/10" 
-                                />
+                            {viewingCompany && (
+                                <div className="mt-2 space-y-6 flex-1 overflow-y-auto px-6 custom-scrollbar pb-8">
+                                    <div className="flex flex-col items-center justify-center p-6 bg-white/5 rounded-xl border border-white/10 mb-6 relative overflow-hidden">
+                                        <div className="p-4 bg-primary/10 rounded-full border border-primary/20 mb-3">
+                                            <Building2 className="h-10 w-10 text-primary" />
+                                        </div>
+                                        <h3 className="text-xl font-bold text-white">{viewingCompany.name}</h3>
+                                        <Badge className="mt-2 bg-primary/20 text-primary border-primary/30 uppercase text-[10px] tracking-widest font-bold px-3">
+                                            Organización Verificada
+                                        </Badge>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-4">
+                                        <div className="p-4 bg-white/5 rounded-lg border border-white/5 space-y-1">
+                                            <div className="flex items-center gap-2 text-zinc-500 text-xs font-semibold uppercase tracking-wider">
+                                                <Globe className="h-3 w-3" /> Identificador Fiscal (RUT)
+                                            </div>
+                                            <p className="text-white font-mono">{viewingCompany.rut}</p>
+                                        </div>
+
+                                        <div className="p-4 bg-white/5 rounded-lg border border-white/5 space-y-1">
+                                            <div className="flex items-center gap-2 text-zinc-500 text-xs font-semibold uppercase tracking-wider">
+                                                <Shield className="h-3 w-3" /> Nivel de Suscripción
+                                            </div>
+                                            <Badge variant="outline" className="mt-1 bg-white/5 border-white/10 text-zinc-300">
+                                                Plan {viewingCompany.plan}
+                                            </Badge>
+                                        </div>
+
+                                        <div className="p-4 bg-white/5 rounded-lg border border-white/5 space-y-1">
+                                            <div className="flex items-center gap-2 text-zinc-500 text-xs font-semibold uppercase tracking-wider">
+                                                <Building2 className="h-3 w-3" /> Estado del Servicio
+                                            </div>
+                                            <Badge variant="outline" className={viewingCompany.status === 'Activo' ? 'bg-green-500/10 text-green-400 border-green-500/20' : ''}>
+                                                {viewingCompany.status}
+                                            </Badge>
+                                        </div>
+
+                                        <div className="p-4 bg-white/5 rounded-lg border border-white/5 space-y-1">
+                                            <div className="flex items-center gap-2 text-zinc-500 text-xs font-semibold uppercase tracking-wider">
+                                                <Calendar className="h-3 w-3" /> Registrada el
+                                            </div>
+                                            <p className="text-white text-sm">
+                                                {new Date(viewingCompany.created_at).toLocaleDateString('es-CL', { 
+                                                    day: '2-digit', 
+                                                    month: 'long', 
+                                                    year: 'numeric' 
+                                                })}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <Separator className="bg-white/5" />
+
+                                    <div className="space-y-4">
+                                        <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Información Adicional</h4>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="text-center p-3 bg-white/5 rounded-lg border border-white/5">
+                                                <p className="text-2xl font-bold text-white">0</p>
+                                                <p className="text-[9px] text-zinc-500 uppercase font-bold">Usuarios</p>
+                                            </div>
+                                            <div className="text-center p-3 bg-white/5 rounded-lg border border-white/5">
+                                                <p className="text-2xl font-bold text-white">0</p>
+                                                <p className="text-[9px] text-zinc-500 uppercase font-bold">Tickets</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="p-6 mt-auto border-t border-white/5">
+                                <Button 
+                                    className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold" 
+                                    onClick={() => setIsSheetOpen(false)}
+                                >
+                                    Cerrar Expediente
+                                </Button>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="p-6">
+                                <SheetHeader>
+                                    <SheetTitle className="text-white">{editingCompany ? "Editar Empresa" : "Registrar Empresa"}</SheetTitle>
+                                    <SheetDescription>
+                                        {editingCompany ? "Modifica los datos de la organización." : "Al registrar una empresa, se habilita automáticamente el acceso para sus colaboradores."}
+                                    </SheetDescription>
+                                </SheetHeader>
                             </div>
                             
-                            <div className="space-y-2">
-                                <Label>Plan de Servicio</Label>
-                                <Select value={formData.plan} onValueChange={(v) => setFormData({...formData, plan: v})}>
-                                    <SelectTrigger className="bg-black/20 border-white/10">
-                                        <SelectValue placeholder="Seleccionar plan..." />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                        <SelectItem value="Básico">Plan Básico</SelectItem>
-                                        <SelectItem value="Pro">Plan Pro (Estándar)</SelectItem>
-                                        <SelectItem value="Premium">Plan Premium (Full SLA)</SelectItem>
-                                        <SelectItem value="Corporativo">Plan Corporativo</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Estado</Label>
-                                <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v})}>
-                                    <SelectTrigger className="bg-black/20 border-white/10">
-                                        <SelectValue placeholder="Estado..." />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                        <SelectItem value="Activo">Activo (Habilitado)</SelectItem>
-                                        <SelectItem value="Inactivo">Inactivo (Suspendido)</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-
-                        <SheetFooter className="mt-auto pt-6 pb-2 border-t border-white/10">
-                            <Button type="button" variant="ghost" onClick={() => setIsSheetOpen(false)} disabled={isSubmitting}>Cancelar</Button>
-                            <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isSubmitting}>
-                                {isSubmitting ? "Procesando..." : (editingCompany ? "Guardar Cambios" : "Habilitar Empresa")}
-                            </Button>
-                        </SheetFooter>
-                    </form>
-                </SheetContent>
-            </Sheet>
-
-            <Sheet open={isViewSheetOpen} onOpenChange={setIsViewSheetOpen}>
-                <SheetContent className="glass-panel border-l-primary/20 flex flex-col sm:max-w-md w-full">
-                    <SheetHeader>
-                        <SheetTitle className="flex items-center gap-2">
-                            <Building2 className="h-5 w-5 text-primary" />
-                            Detalles de la Empresa
-                        </SheetTitle>
-                        <SheetDescription>
-                            Vista de solo lectura del perfil corporativo.
-                        </SheetDescription>
-                    </SheetHeader>
-
-                    {viewingCompany && (
-                        <div className="mt-8 space-y-6 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                            <div className="flex flex-col items-center justify-center p-6 bg-white/5 rounded-xl border border-white/10 mb-6">
-                                <div className="p-4 bg-primary/10 rounded-full border border-primary/20 mb-3">
-                                    <Building2 className="h-10 w-10 text-primary" />
-                                </div>
-                                <h3 className="text-xl font-bold text-white">{viewingCompany.name}</h3>
-                                <Badge className="mt-2 bg-primary/20 text-primary border-primary/30 uppercase text-[10px] tracking-widest font-bold">
-                                    Organización Verificada
-                                </Badge>
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-4">
-                                <div className="p-4 bg-white/5 rounded-lg border border-white/5 space-y-1">
-                                    <div className="flex items-center gap-2 text-zinc-500 text-xs font-semibold uppercase tracking-wider">
-                                        <Globe className="h-3 w-3" /> Identificador Fiscal (RUT)
+                            <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden px-6 mt-2">
+                                <div className="space-y-4 flex-1 overflow-y-auto pr-2 custom-scrollbar pb-6">
+                                    <div className="space-y-2">
+                                        <Label className="text-zinc-400 text-xs">Nombre de la Organización</Label>
+                                        <Input 
+                                            required 
+                                            placeholder="Ej: Corporación Delta S.A." 
+                                            value={formData.nombre} 
+                                            onChange={e => setFormData({...formData, nombre: e.target.value})} 
+                                            className="bg-white/5 border-white/10" 
+                                        />
                                     </div>
-                                    <p className="text-white font-mono">{viewingCompany.rut}</p>
-                                </div>
 
-                                <div className="p-4 bg-white/5 rounded-lg border border-white/5 space-y-1">
-                                    <div className="flex items-center gap-2 text-zinc-500 text-xs font-semibold uppercase tracking-wider">
-                                        <Shield className="h-3 w-3" /> Nivel de Suscripción
+                                    <div className="space-y-2">
+                                        <Label className="text-zinc-400 text-xs">RUT / Identificador Fiscal</Label>
+                                        <Input 
+                                            required 
+                                            placeholder="76.xxx.xxx-x" 
+                                            value={formData.rut} 
+                                            onChange={e => setFormData({...formData, rut: e.target.value})} 
+                                            className="bg-white/5 border-white/10" 
+                                        />
                                     </div>
-                                    <Badge variant="outline" className="mt-1 bg-white/5 border-white/10 text-zinc-300">
-                                        Plan {viewingCompany.plan}
-                                    </Badge>
-                                </div>
-
-                                <div className="p-4 bg-white/5 rounded-lg border border-white/5 space-y-1">
-                                    <div className="flex items-center gap-2 text-zinc-500 text-xs font-semibold uppercase tracking-wider">
-                                        <Globe className="h-3 w-3" /> Estado del Servicio
+                                    
+                                    <div className="space-y-2">
+                                        <Label className="text-zinc-400 text-xs">Plan de Servicio</Label>
+                                        <Select value={formData.plan} onValueChange={(v) => setFormData({...formData, plan: v})}>
+                                            <SelectTrigger className="bg-white/5 border-white/10">
+                                                <SelectValue placeholder="Seleccionar plan..." />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                                <SelectItem value="Básico">Plan Básico</SelectItem>
+                                                <SelectItem value="Pro">Plan Pro (Estándar)</SelectItem>
+                                                <SelectItem value="Premium">Plan Premium (Full SLA)</SelectItem>
+                                                <SelectItem value="Corporativo">Plan Corporativo</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
-                                    <Badge variant="outline" className={viewingCompany.status === 'Activo' ? 'bg-green-500/10 text-green-400 border-green-500/20' : ''}>
-                                        {viewingCompany.status}
-                                    </Badge>
-                                </div>
 
-                                <div className="p-4 bg-white/5 rounded-lg border border-white/5 space-y-1">
-                                    <div className="flex items-center gap-2 text-zinc-500 text-xs font-semibold uppercase tracking-wider">
-                                        <Calendar className="h-3 w-3" /> Registrada el
-                                    </div>
-                                    <p className="text-white text-sm">
-                                        {new Date(viewingCompany.created_at).toLocaleDateString('es-CL', { 
-                                            day: '2-digit', 
-                                            month: 'long', 
-                                            year: 'numeric' 
-                                        })}
-                                    </p>
-                                </div>
-                            </div>
-
-                            <Separator className="bg-white/5 my-6" />
-
-                            <div className="space-y-4">
-                                <h4 className="text-sm font-semibold text-zinc-400 uppercase tracking-widest">Información Adicional</h4>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="text-center p-3 bg-white/5 rounded-lg">
-                                        <p className="text-2xl font-bold text-white">0</p>
-                                        <p className="text-[10px] text-zinc-500 uppercase">Usuarios</p>
-                                    </div>
-                                    <div className="text-center p-3 bg-white/5 rounded-lg">
-                                        <p className="text-2xl font-bold text-white">0</p>
-                                        <p className="text-[10px] text-zinc-500 uppercase">Tickets</p>
+                                    <div className="space-y-2">
+                                        <Label className="text-zinc-400 text-xs">Estado</Label>
+                                        <Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v})}>
+                                            <SelectTrigger className="bg-white/5 border-white/10">
+                                                <SelectValue placeholder="Estado..." />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                                <SelectItem value="Activo">Activo (Habilitado)</SelectItem>
+                                                <SelectItem value="Inactivo">Inactivo (Suspendido)</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
+
+                                <div className="mt-auto py-6 border-t border-white/5 flex gap-3">
+                                    <Button type="button" variant="ghost" className="flex-1 hover:bg-white/5" onClick={() => setIsSheetOpen(false)} disabled={isSubmitting}>Cancelar</Button>
+                                    <Button type="submit" className="flex-1 bg-primary hover:bg-primary/90 text-black font-bold uppercase tracking-wider" disabled={isSubmitting}>
+                                        {isSubmitting ? "Procesando..." : (editingCompany ? "Guardar" : "Habilitar")}
+                                    </Button>
+                                </div>
+                            </form>
+                        </>
                     )}
-
-                    <SheetFooter className="mt-auto pt-6 border-t border-white/10">
-                        <Button 
-                            className="w-full bg-zinc-800 hover:bg-zinc-700 text-white" 
-                            onClick={() => setIsViewSheetOpen(false)}
-                        >
-                            Cerrar Vista
-                        </Button>
-                    </SheetFooter>
                 </SheetContent>
             </Sheet>
 

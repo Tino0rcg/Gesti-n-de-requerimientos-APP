@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { 
@@ -54,7 +54,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 
 export default function TecnicosPage() {
-    const supabase = createClient();
+    const supabase = useMemo(() => createClient(), []);
     const router = useRouter();
     const { toast } = useToast();
     const [userRole, setUserRole] = useState<string | null>(null);
@@ -63,7 +63,7 @@ export default function TecnicosPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [isSheetOpen, setIsSheetOpen] = useState(false);
-    const [isViewSheetOpen, setIsViewSheetOpen] = useState(false);
+    const [sheetMode, setSheetMode] = useState<'create' | 'edit' | 'view'>('create');
     const [editingTech, setEditingTech] = useState<any | null>(null);
     const [viewingTech, setViewingTech] = useState<any | null>(null);
     const [techToDelete, setTechToDelete] = useState<any | null>(null);
@@ -119,6 +119,7 @@ export default function TecnicosPage() {
     const handleOpenCreate = () => {
         setEditingTech(null);
         setFormData({ nombre: "", email: "", especialidad: "Soporte Nivel 1", estado: "Disponible", password: "" });
+        setSheetMode('create');
         setIsSheetOpen(true);
     };
 
@@ -131,6 +132,7 @@ export default function TecnicosPage() {
             estado: tech.status || "Disponible",
             password: "", // Not used for edit
         });
+        setSheetMode('edit');
         setIsSheetOpen(true);
     };
 
@@ -206,10 +208,17 @@ export default function TecnicosPage() {
         (t.specialty || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    if (loading || !userRole) return <div className="p-8 text-center text-zinc-500 italic">Verificando facultades de administración...</div>;
-
     return (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6 relative">
+            {/* Overlay de carga estable */}
+            {(loading && tecnicos.length === 0) && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-zinc-950/20 backdrop-blur-sm rounded-xl">
+                    <div className="flex flex-col items-center gap-2">
+                        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                        <p className="text-xs text-zinc-500 italic">Cargando equipo técnico...</p>
+                    </div>
+                </div>
+            )}
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Técnicos y Especialistas</h1>
@@ -302,7 +311,7 @@ export default function TecnicosPage() {
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        <DropdownMenu>
+                                        <DropdownMenu modal={false}>
                                             <DropdownMenuTrigger asChild>
                                                 <Button variant="ghost" size="icon" className="hover:text-white">
                                                     <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
@@ -313,18 +322,17 @@ export default function TecnicosPage() {
                                                 <DropdownMenuSeparator className="bg-white/5" />
                                                 <DropdownMenuItem 
                                                     className="gap-2 cursor-pointer" 
-                                                    onSelect={(e) => {
-                                                        e.preventDefault();
+                                                    onSelect={() => {
                                                         setViewingTech(tec);
-                                                        setIsViewSheetOpen(true);
+                                                        setSheetMode('view');
+                                                        setIsSheetOpen(true);
                                                     }}
                                                 >
                                                     <Eye className="h-4 w-4" /> Ver Perfil
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem 
                                                     className="gap-2 cursor-pointer" 
-                                                    onSelect={(e) => {
-                                                        e.preventDefault();
+                                                    onSelect={() => {
                                                         handleOpenEdit(tec);
                                                     }}
                                                 >
@@ -332,8 +340,7 @@ export default function TecnicosPage() {
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem 
                                                     className="gap-2 cursor-pointer text-red-400 focus:text-red-400 focus:bg-red-400/10" 
-                                                    onSelect={(e) => {
-                                                        e.preventDefault();
+                                                    onSelect={() => {
                                                         setTechToDelete(tec);
                                                     }}
                                                 >
@@ -350,173 +357,177 @@ export default function TecnicosPage() {
             </Card>
 
             <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-                <SheetContent className="glass-panel border-l-primary/20 flex flex-col sm:max-w-md w-full">
-                    <SheetHeader>
-                        <SheetTitle>{editingTech ? "Editar Técnico" : "Inscribir Nuevo Técnico"}</SheetTitle>
-                        <SheetDescription>
-                            {editingTech ? "Actualiza los datos del especialista." : "El nuevo agente comenzará con 0 carga laboral y calificación perfecta (5.0)."}
-                        </SheetDescription>
-                    </SheetHeader>
-                    
-                    <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden mt-6">
-                        <div className="space-y-4 flex-1 overflow-y-auto pr-4 custom-scrollbar pb-6">
-                            <div className="space-y-2">
-                                <Label>Nombre de Técnico</Label>
-                                <Input required placeholder="Ej: Luis Valenzuela" value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} className="bg-black/20" />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Correo Electrónico</Label>
-                                <Input required type="email" placeholder="tecnico@vanguardia.cl" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="bg-black/20" disabled={!!editingTech} />
-                            </div>
-                            {!editingTech && (
-                                <div className="space-y-2">
-                                    <Label>Contraseña de Acceso</Label>
-                                    <Input required type="password" placeholder="••••••••" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="bg-black/20" />
-                                </div>
-                            )}
-                            
-                            <div className="space-y-2">
-                                <Label>Especialidad Principal</Label>
-                                <Select value={formData.especialidad} onValueChange={(v) => setFormData({...formData, especialidad: v})}>
-                                    <SelectTrigger className="bg-black/20">
-                                        <SelectValue placeholder="Seleccionar rubro..." />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                        <SelectItem value="Soporte Nivel 1">Soporte Nivel 1</SelectItem>
-                                        <SelectItem value="Soporte Nivel 2">Soporte Nivel 2</SelectItem>
-                                        <SelectItem value="Infraestructura">Infraestructura Fija</SelectItem>
-                                        <SelectItem value="Redes y Servidores">Redes y Servidores</SelectItem>
-                                        <SelectItem value="Analísta de Ciberseguridad">Especialista Seguridad</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Estado Inicial</Label>
-                                <Select value={formData.estado} onValueChange={(v) => setFormData({...formData, estado: v})}>
-                                    <SelectTrigger className="bg-black/20">
-                                        <SelectValue placeholder="Estado..." />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                        <SelectItem value="Disponible">Disponible para oficina</SelectItem>
-                                        <SelectItem value="En Terreno">Operando en Terreno</SelectItem>
-                                        <SelectItem value="Fuera de turno">Fuera de turno (No asignar)</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-
-                        <SheetFooter className="mt-auto pt-6 pb-2 border-t border-white/10">
-                            <Button type="button" variant="ghost" onClick={() => setIsSheetOpen(false)} disabled={isSubmitting}>Cancelar</Button>
-                            <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white" disabled={isSubmitting}>
-                                {isSubmitting ? "Procesando..." : (editingTech ? "Guardar Perfil" : "Incorporar Técnico")}
-                            </Button>
-                        </SheetFooter>
-                    </form>
-                </SheetContent>
-            </Sheet>
-
-            <Sheet open={isViewSheetOpen} onOpenChange={setIsViewSheetOpen}>
                 <SheetContent className="glass-panel border-l-primary/20 flex flex-col sm:max-w-md w-full p-0">
-                    <div className="p-6">
-                        <SheetHeader>
-                            <SheetTitle className="flex items-center gap-2 text-white">
-                                <Award className="h-5 w-5 text-primary" />
-                                Ficha del Técnico
-                            </SheetTitle>
-                            <SheetDescription>
-                                Perfil profesional y métricas de desempeño.
-                            </SheetDescription>
-                        </SheetHeader>
-                    </div>
-
-                    {viewingTech && (
-                        <div className="mt-2 space-y-6 flex-1 overflow-y-auto px-6 custom-scrollbar pb-8">
-                            <div className="flex flex-col items-center justify-center p-6 bg-white/5 rounded-2xl border border-white/10 mb-6 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-4 opacity-5">
-                                    <Star className="h-24 w-24 fill-current" />
-                                </div>
-                                <Avatar className="h-20 w-20 border-2 border-primary/20 mb-4">
-                                    <AvatarFallback className="bg-primary/10 text-primary text-2xl font-bold uppercase">
-                                        {(viewingTech.name || "T").charAt(0)}
-                                    </AvatarFallback>
-                                </Avatar>
-                                <h3 className="text-xl font-bold text-white tracking-tight">{viewingTech.name}</h3>
-                                <div className="flex items-center gap-2 mt-2">
-                                    <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30 uppercase text-[10px] tracking-widest font-bold px-3">
-                                        Especialista {viewingTech.specialty}
-                                    </Badge>
-                                </div>
+                    {sheetMode === 'view' ? (
+                        <>
+                            <div className="p-6">
+                                <SheetHeader>
+                                    <SheetTitle className="flex items-center gap-2 text-white">
+                                        <Award className="h-5 w-5 text-primary" />
+                                        Ficha del Técnico
+                                    </SheetTitle>
+                                    <SheetDescription>
+                                        Perfil profesional y métricas de desempeño.
+                                    </SheetDescription>
+                                </SheetHeader>
                             </div>
 
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-1 gap-3">
-                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-1">
-                                        <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
-                                            <Mail className="h-3 w-3" /> Contacto Corporativo
+                            {viewingTech && (
+                                <div className="mt-2 space-y-6 flex-1 overflow-y-auto px-6 custom-scrollbar pb-8">
+                                    <div className="flex flex-col items-center justify-center p-6 bg-white/5 rounded-2xl border border-white/10 mb-6 relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 p-4 opacity-5">
+                                            <Star className="h-24 w-24 fill-current" />
                                         </div>
-                                        <p className="text-white text-sm break-all font-mono">{viewingTech.email}</p>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-1">
-                                            <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
-                                                <Star className="h-3 w-3" /> CSAT Score
-                                            </div>
-                                            <div className="flex items-center gap-1">
-                                                <span className="text-lg font-bold text-white">{viewingTech.rating ? Number(viewingTech.rating).toFixed(1) : "5.0"}</span>
-                                                <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
-                                            </div>
-                                        </div>
-                                        <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-1">
-                                            <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
-                                                <Shield className="h-3 w-3" /> Estado
-                                            </div>
-                                            <Badge variant="outline" className={viewingTech.status === 'Disponible' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-orange-500/10 text-orange-400 border-orange-500/20'}>
-                                                {viewingTech.status}
+                                        <Avatar className="h-20 w-20 border-2 border-primary/20 mb-4">
+                                            <AvatarFallback className="bg-primary/10 text-primary text-2xl font-bold uppercase">
+                                                {(viewingTech.name || "T").charAt(0)}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <h3 className="text-xl font-bold text-white tracking-tight">{viewingTech.name}</h3>
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30 uppercase text-[10px] tracking-widest font-bold px-3">
+                                                Especialista {viewingTech.specialty}
                                             </Badge>
                                         </div>
                                     </div>
 
-                                    <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-1">
-                                        <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
-                                            <Calendar className="h-3 w-3" /> Fecha de Ingreso
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-1 gap-3">
+                                            <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-1">
+                                                <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                                                    <Mail className="h-3 w-3" /> Contacto Corporativo
+                                                </div>
+                                                <p className="text-white text-sm break-all font-mono">{viewingTech.email}</p>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-1">
+                                                    <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                                                        <Star className="h-3 w-3" /> CSAT Score
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-lg font-bold text-white">{viewingTech.rating ? Number(viewingTech.rating).toFixed(1) : "5.0"}</span>
+                                                        <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
+                                                    </div>
+                                                </div>
+                                                <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-1">
+                                                    <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                                                        <Shield className="h-3 w-3" /> Estado
+                                                    </div>
+                                                    <Badge variant="outline" className={viewingTech.status === 'Disponible' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-orange-500/10 text-orange-400 border-orange-500/20'}>
+                                                        {viewingTech.status}
+                                                    </Badge>
+                                                </div>
+                                            </div>
+
+                                            <div className="p-4 bg-white/5 rounded-xl border border-white/5 space-y-1">
+                                                <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
+                                                    <Calendar className="h-3 w-3" /> Fecha de Ingreso
+                                                </div>
+                                                <p className="text-white text-sm">
+                                                    {viewingTech.created_at ? new Date(viewingTech.created_at).toLocaleDateString('es-CL', { 
+                                                        day: '2-digit', month: 'long', year: 'numeric'
+                                                    }) : 'Hoy'}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <p className="text-white text-sm">
-                                            {viewingTech.created_at ? new Date(viewingTech.created_at).toLocaleDateString('es-CL', { 
-                                                day: '2-digit', month: 'long', year: 'numeric'
-                                            }) : 'Hoy'}
-                                        </p>
+                                    </div>
+
+                                    <Separator className="bg-white/5" />
+
+                                    <div className="space-y-4">
+                                        <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Reporte de Operaciones</h4>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="p-4 bg-zinc-900/50 rounded-xl border border-white/5 text-center">
+                                                <p className="text-2xl font-bold text-white">0</p>
+                                                <p className="text-[9px] text-zinc-500 uppercase font-bold">Tickets del Mes</p>
+                                            </div>
+                                            <div className="p-4 bg-zinc-900/50 rounded-xl border border-white/5 text-center">
+                                                <p className="text-2xl font-bold text-zinc-400">0%</p>
+                                                <p className="text-[9px] text-zinc-500 uppercase font-bold">Productividad</p>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
+                            )}
+
+                            <div className="p-6 mt-auto border-t border-white/5">
+                                <Button 
+                                    className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold" 
+                                    onClick={() => setIsSheetOpen(false)}
+                                >
+                                    Cerrar Ficha
+                                </Button>
                             </div>
-
-                            <Separator className="bg-white/5" />
-
-                            <div className="space-y-4">
-                                <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Reporte de Operaciones</h4>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="p-4 bg-zinc-900/50 rounded-xl border border-white/5 text-center">
-                                        <p className="text-2xl font-bold text-white">0</p>
-                                        <p className="text-[9px] text-zinc-500 uppercase font-bold">Tickets del Mes</p>
+                        </>
+                    ) : (
+                        <>
+                            <div className="p-6">
+                                <SheetHeader>
+                                    <SheetTitle className="text-white">{editingTech ? "Editar Técnico" : "Inscribir Nuevo Técnico"}</SheetTitle>
+                                    <SheetDescription>
+                                        {editingTech ? "Actualiza los datos del especialista." : "El nuevo agente comenzará con 0 carga laboral y calificación perfecta (5.0)."}
+                                    </SheetDescription>
+                                </SheetHeader>
+                            </div>
+                            
+                            <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden px-6 mt-2">
+                                <div className="space-y-4 flex-1 overflow-y-auto pr-2 custom-scrollbar pb-6">
+                                    <div className="space-y-2">
+                                        <Label className="text-zinc-400 text-xs">Nombre de Técnico</Label>
+                                        <Input required placeholder="Ej: Luis Valenzuela" value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} className="bg-white/5 border-white/10" />
                                     </div>
-                                    <div className="p-4 bg-zinc-900/50 rounded-xl border border-white/5 text-center">
-                                        <p className="text-2xl font-bold text-zinc-400">0%</p>
-                                        <p className="text-[9px] text-zinc-500 uppercase font-bold">Productividad</p>
+                                    <div className="space-y-2">
+                                        <Label className="text-zinc-400 text-xs">Correo Electrónico</Label>
+                                        <Input required type="email" placeholder="tecnico@vanguardia.cl" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="bg-white/5 border-white/10" disabled={!!editingTech} />
+                                    </div>
+                                    {!editingTech && (
+                                        <div className="space-y-2">
+                                            <Label className="text-zinc-400 text-xs">Contraseña de Acceso</Label>
+                                            <Input required type="password" placeholder="••••••••" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="bg-white/5 border-white/10" />
+                                        </div>
+                                    )}
+                                    
+                                    <div className="space-y-2">
+                                        <Label className="text-zinc-400 text-xs">Especialidad Principal</Label>
+                                        <Select value={formData.especialidad} onValueChange={(v) => setFormData({...formData, especialidad: v})}>
+                                            <SelectTrigger className="bg-white/5 border-white/10">
+                                                <SelectValue placeholder="Seleccionar rubro..." />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                                <SelectItem value="Soporte Nivel 1">Soporte Nivel 1</SelectItem>
+                                                <SelectItem value="Soporte Nivel 2">Soporte Nivel 2</SelectItem>
+                                                <SelectItem value="Infraestructura">Infraestructura Fija</SelectItem>
+                                                <SelectItem value="Redes y Servidores">Redes y Servidores</SelectItem>
+                                                <SelectItem value="Analísta de Ciberseguridad">Especialista Seguridad</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label className="text-zinc-400 text-xs">Estado Inicial</Label>
+                                        <Select value={formData.estado} onValueChange={(v) => setFormData({...formData, estado: v})}>
+                                            <SelectTrigger className="bg-white/5 border-white/10">
+                                                <SelectValue placeholder="Estado..." />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                                <SelectItem value="Disponible">Disponible para oficina</SelectItem>
+                                                <SelectItem value="En Terreno">Operando en Terreno</SelectItem>
+                                                <SelectItem value="Fuera de turno">Fuera de turno (No asignar)</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
+
+                                <div className="mt-auto py-6 border-t border-white/5 flex gap-3">
+                                    <Button type="button" variant="ghost" className="flex-1 hover:bg-white/5" onClick={() => setIsSheetOpen(false)} disabled={isSubmitting}>Cancelar</Button>
+                                    <Button type="submit" className="flex-1 bg-primary hover:bg-primary/90 text-black font-bold uppercase tracking-wider" disabled={isSubmitting}>
+                                        {isSubmitting ? "Procesando..." : (editingTech ? "Guardar" : "Incorporar")}
+                                    </Button>
+                                </div>
+                            </form>
+                        </>
                     )}
-
-                    <div className="p-6 mt-auto border-t border-white/5">
-                        <Button 
-                            className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold" 
-                            onClick={() => setIsViewSheetOpen(false)}
-                        >
-                            Cerrar Expediente
-                        </Button>
-                    </div>
                 </SheetContent>
             </Sheet>
 
