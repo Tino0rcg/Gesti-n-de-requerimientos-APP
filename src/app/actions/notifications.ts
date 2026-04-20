@@ -15,7 +15,7 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-export async function sendTicketNotification(ticketId: string, actionType: string) {
+export async function sendTicketNotification(ticketId: string, actionType: string, targetRole: 'submitter' | 'assignee' = 'submitter') {
     try {
         const supabase = await createClient();
 
@@ -70,11 +70,14 @@ export async function sendTicketNotification(ticketId: string, actionType: strin
 
         const pdfBuffer = await renderToBuffer(element as any);
 
+        const targetEmail = targetRole === 'assignee' ? assignee?.email : submitter?.email;
+        const targetName = targetRole === 'assignee' ? assignee?.name : submitter?.name;
+
         // 3. Evaluar configuración de Brevo
         if (!process.env.BREVO_SMTP_KEY || process.env.BREVO_SMTP_KEY === 'test') {
             console.log("\n================ [ ENTORNO LOCAL / MOCK ] ================");
             console.log(`📡 BREVO EMAIL SIMULATION -> ${actionType}`);
-            console.log(`📩 Destino: ${submitter?.email}`);
+            console.log(`📩 Destino: ${targetEmail}`);
             console.log(`📎 Adjunto PDF Listo: Trazabilidad_${ticket.id}.pdf (${(pdfBuffer.length / 1024).toFixed(2)} KB)`);
             console.log("========================================================\n");
             return { success: true, simulated: true };
@@ -83,7 +86,7 @@ export async function sendTicketNotification(ticketId: string, actionType: strin
         // 4. Despacho real con Brevo SMTP
         await transporter.sendMail({
             from: `"Soporte Vanguardia" <${process.env.BREVO_EMAIL}>`,
-            to: submitter?.email || process.env.BREVO_EMAIL, // Enviar al cliente real si existe
+            to: targetEmail || process.env.BREVO_EMAIL,
             subject: `[Ticket ${ticket.id}] Actualización: ${actionType}`,
             html: `
                 <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e4e4e7; border-radius: 8px; overflow: hidden;">
@@ -91,7 +94,7 @@ export async function sendTicketNotification(ticketId: string, actionType: strin
                         <h1 style="color: #fff; margin: 0; font-size: 20px; tracking-tight: -0.05em; font-weight: 800; text-transform: uppercase; font-style: italic;">Sistema de Requerimientos</h1>
                     </div>
                     <div style="padding: 30px;">
-                        <h2 style="color: #09090b; margin-top: 0;">Hola ${submitter?.name},</h2>
+                        <h2 style="color: #09090b; margin-top: 0;">Hola ${targetName || 'Usuario'},</h2>
                         <p>El ticket <strong>${ticket.subject}</strong> acaba de registrar actividad en la plataforma.</p>
                         <div style="padding: 16px; background: #f8fafc; border-left: 4px solid #3b82f6; border-radius: 4px; margin: 24px 0;">
                             <strong style="display: block; font-size: 11px; text-transform: uppercase; color: #64748b; margin-bottom: 4px;">Evento Operativo:</strong>

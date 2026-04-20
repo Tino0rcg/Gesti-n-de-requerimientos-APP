@@ -22,9 +22,9 @@ import {
     Search, 
     Wrench, 
     Star,
-    Pencil,
     Trash2,
     Eye,
+    EyeOff,
     Shield,
     Calendar,
     Award
@@ -67,6 +67,7 @@ export default function TecnicosPage() {
     const [editingTech, setEditingTech] = useState<any | null>(null);
     const [viewingTech, setViewingTech] = useState<any | null>(null);
     const [techToDelete, setTechToDelete] = useState<any | null>(null);
+    const [showPassword, setShowPassword] = useState(false);
     
     // Form State
     const [formData, setFormData] = useState({
@@ -471,20 +472,44 @@ export default function TecnicosPage() {
                                 </SheetHeader>
                             </div>
                             
-                            <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden px-6 mt-2">
+                            <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden px-6 mt-2" autoComplete="off">
                                 <div className="space-y-4 flex-1 overflow-y-auto pr-2 custom-scrollbar pb-6">
                                     <div className="space-y-2">
                                         <Label className="text-zinc-400 text-xs">Nombre de Técnico</Label>
-                                        <Input required placeholder="Ej: Luis Valenzuela" value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} className="bg-white/5 border-white/10" />
+                                        <Input required placeholder="Ej: Luis Valenzuela" value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} className="bg-white/5 border-white/10" autoComplete="off" />
                                     </div>
                                     <div className="space-y-2">
                                         <Label className="text-zinc-400 text-xs">Correo Electrónico</Label>
-                                        <Input required type="email" placeholder="tecnico@vanguardia.cl" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="bg-white/5 border-white/10" disabled={!!editingTech} />
+                                        <Input required type="email" placeholder="tecnico@vanguardia.cl" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="bg-white/5 border-white/10" disabled={!!editingTech} autoComplete="off" />
                                     </div>
                                     {!editingTech && (
                                         <div className="space-y-2">
                                             <Label className="text-zinc-400 text-xs">Contraseña de Acceso</Label>
-                                            <Input required type="password" placeholder="••••••••" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="bg-white/5 border-white/10" />
+                                            <div className="relative">
+                                                <Input 
+                                                    required 
+                                                    type={showPassword ? "text" : "password"} 
+                                                    placeholder="••••••••" 
+                                                    value={formData.password} 
+                                                    onChange={e => setFormData({...formData, password: e.target.value})} 
+                                                    className="bg-white/5 border-white/10 pr-10" 
+                                                    autoComplete="new-password"
+                                                    data-lpignore="true"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="absolute right-0 top-0 h-full w-9 hover:bg-transparent"
+                                                    onClick={() => setShowPassword(!showPassword)}
+                                                >
+                                                    {showPassword ? (
+                                                        <EyeOff className="h-4 w-4 text-zinc-500" />
+                                                    ) : (
+                                                        <Eye className="h-4 w-4 text-zinc-500" />
+                                                    )}
+                                                </Button>
+                                            </div>
                                         </div>
                                     )}
                                     

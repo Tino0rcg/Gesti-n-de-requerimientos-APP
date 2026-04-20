@@ -1,98 +1,99 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { ShieldCheck, Cpu, ArrowRight, Zap } from "lucide-react";
+import { 
+  ArrowRight, 
+  Zap, 
+  BarChart3, 
+  Clock, 
+  CheckCircle2, 
+  ShieldCheck,
+  Activity,
+  MessageSquare,
+  Headphones
+} from "lucide-react";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-[#09090b] text-white selection:bg-primary/30 selection:text-primary">
-      {/* Background Glows */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-primary/20 rounded-full blur-[120px] animate-pulse" />
-        <div className="absolute top-[20%] -right-[10%] w-[30%] h-[30%] bg-blue-500/10 rounded-full blur-[100px]" />
+    <div className="min-h-screen bg-[#09090b] text-zinc-100 overflow-hidden font-sans selection:bg-blue-500/30 selection:text-blue-200">
+      
+      {/* Background Effects */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-blue-600/10 rounded-full blur-[120px] mix-blend-screen" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-indigo-600/10 rounded-full blur-[120px] mix-blend-screen" />
+        <div className="absolute top-[30%] left-[50%] -translate-x-1/2 w-[60%] h-[40%] bg-blue-400/5 rounded-full blur-[100px] animate-pulse" />
       </div>
 
-      {/* Navigation */}
-      <header className="relative z-50 flex items-center justify-between px-6 py-8 mx-auto max-w-7xl">
-        <div className="flex items-center gap-3">
-          <Image 
-            src="https://github.com/Tino0rcg/imagenes-pagina-online-2.0/blob/main/LOGO%20ONLINE%20SYSTEM%20NORMAL.png?raw=true" 
-            alt="Online System Logo" 
-            width={50} 
-            height={50}
-            className="object-contain"
-          />
-          <span className="text-2xl font-black tracking-tighter uppercase italic">Online System</span>
+      {/* Modern Navbar */}
+      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-black/50 backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Image 
+              src="https://github.com/Tino0rcg/imagenes-pagina-online-2.0/blob/main/LOGO%20ONLINE%20SYSTEM%20NORMAL.png?raw=true" 
+              alt="Online System Logo" 
+              width={110} 
+              height={110}
+              className="object-contain -my-8 drop-shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+            />
+            <span className="text-xl font-bold tracking-tight text-white uppercase italic">Online<span className="text-blue-500 font-light">System</span></span>
+          </div>
+          <div className="flex items-center gap-4">
+            <Link href="/login">
+              <Button className="rounded-full bg-white text-black hover:bg-zinc-200 font-semibold px-6 shadow-[0_0_20px_rgba(255,255,255,0.15)] transition-all">
+                Ingresar al Portal
+              </Button>
+            </Link>
+          </div>
         </div>
-        <Link href="/login">
-          <Button variant="ghost" className="text-zinc-400 hover:text-white hover:bg-white/5 font-bold uppercase tracking-widest text-xs">
-            Acceso Clientes
-          </Button>
-        </Link>
-      </header>
+      </nav>
 
       {/* Hero Section */}
-      <main className="relative z-10 flex flex-col items-center justify-center px-4 pt-20 pb-32 mx-auto max-w-5xl text-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1 mb-8 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-widest animate-bounce">
-          <Zap className="w-3 h-3" />
-          Plataforma de Nueva Generación
+      <section className="relative z-10 pt-32 pb-20 px-6 max-w-7xl mx-auto flex flex-col items-center text-center">
+        
+        {/* Badge */}
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 mb-8 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-wider backdrop-blur-sm">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+          </span>
+          Plataforma de Soporte Tecnológico
         </div>
-        
-        <h1 className="text-5xl md:text-8xl font-black tracking-tighter leading-[0.9] mb-8 italic uppercase">
-          Gestión de <span className="text-primary italic">Requerimientos</span> <br /> 
-          <span className="text-zinc-500">con Inteligencia Operativa.</span>
+
+        {/* Main Headline */}
+        <h1 className="text-5xl md:text-7xl lg:text-8xl font-extrabold tracking-tighter leading-[1.05] mb-8 max-w-5xl">
+          Gestión de Servicios <br />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400">
+            Inteligente & Rápida.
+          </span>
         </h1>
-        
-        <p className="max-w-2xl mb-12 text-lg md:text-xl text-zinc-400 font-medium leading-relaxed">
-          Optimice la resolución de incidentes, controle sus SLAs y mantenga la trazabilidad total 
-          de sus activos digitales con la plataforma líder de Online System.
+
+        {/* Subtitle */}
+        <p className="max-w-2xl mb-10 text-lg md:text-xl text-zinc-400 font-medium leading-relaxed">
+          Optimiza la resolución de incidentes, controla tus SLAs en tiempo real y centraliza las operaciones de tu equipo técnico con nuestra plataforma de próxima generación.
         </p>
 
-        <div className="flex flex-col sm:flex-row items-center gap-4">
-          <Link href="/login" className="w-full sm:w-auto">
-            <Button size="lg" className="w-full sm:w-auto h-14 px-8 bg-primary hover:bg-primary/90 text-black font-black uppercase italic tracking-tighter text-lg shadow-[0_0_40px_rgba(59,130,246,0.3)] transition-all hover:scale-105 active:scale-95">
-              Iniciar Sesión <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-          </Link>
-          <div className="flex items-center gap-8 px-6 py-3 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
-            <div className="flex flex-col items-start">
-              <span className="text-xs text-zinc-500 uppercase font-bold tracking-widest">Soporte</span>
-              <span className="text-sm font-bold">24/7 Realtime</span>
-            </div>
-            <div className="w-px h-8 bg-white/10" />
-            <div className="flex flex-col items-start">
-              <span className="text-xs text-zinc-500 uppercase font-bold tracking-widest">SLA</span>
-              <span className="text-sm font-bold">99.9% Success</span>
-            </div>
-          </div>
-        </div>
 
-        {/* Floating Icons Background Decor */}
-        <div className="absolute top-1/2 left-0 -translate-y-1/2 -translate-x-20 opacity-10 hidden xl:block">
-          <Cpu className="w-64 h-64 text-primary" />
-        </div>
-        <div className="absolute top-1/2 right-0 -translate-y-1/2 translate-x-32 opacity-10 hidden xl:block">
-          <ShieldCheck className="w-64 h-64 text-blue-500" />
-        </div>
-      </main>
+      </section>
 
-      {/* Footer / Features snippet */}
-      <footer className="relative z-10 border-t border-white/5 bg-black/40 backdrop-blur-3xl py-12 px-6">
-        <div className="mx-auto max-w-7xl grid grid-cols-1 md:grid-cols-3 gap-12 text-center md:text-left">
-          <div className="space-y-4">
-            <h3 className="text-primary font-bold uppercase tracking-widest text-xs">01. Trazabilidad</h3>
-            <p className="text-zinc-500 text-sm">Bitácora completa de cada requerimiento con reportes PDF automáticos.</p>
-          </div>
-          <div className="space-y-4">
-            <h3 className="text-primary font-bold uppercase tracking-widest text-xs">02. Control ANS</h3>
-            <p className="text-zinc-500 text-sm">Monitoreo en tiempo real de Acuerdos de Nivel de Servicio contractuales.</p>
-          </div>
-          <div className="space-y-4">
-            <h3 className="text-primary font-bold uppercase tracking-widest text-xs">03. Omnicanalidad</h3>
-            <p className="text-zinc-500 text-sm">Centralice sus solicitudes y técnicos en una sola interfaz inteligente.</p>
-          </div>
+
+
+      {/* Footer Minimal */}
+      <footer className="border-t border-white/10 bg-black/80 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+                <Image 
+                  src="https://github.com/Tino0rcg/imagenes-pagina-online-2.0/blob/main/LOGO%20ONLINE%20SYSTEM%20NORMAL.png?raw=true" 
+                  alt="Online System Logo" 
+                  width={20} 
+                  height={20}
+                  className="object-contain opacity-50"
+                />
+                <span className="font-bold text-sm text-zinc-300">Online System © {new Date().getFullYear()}</span>
+            </div>
+            <p className="text-[11px] text-zinc-500 uppercase tracking-widest font-bold">Plataforma Asegurada y Restringida</p>
         </div>
       </footer>
+
     </div>
   );
 }

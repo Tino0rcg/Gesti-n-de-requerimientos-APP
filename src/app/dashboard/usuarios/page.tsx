@@ -21,6 +21,7 @@ import {
     Pencil,
     Trash2,
     Eye,
+    EyeOff,
     Shield,
     User as UserIcon,
     Calendar,
@@ -71,6 +72,7 @@ export default function UsuariosPage() {
     const [editingUser, setEditingUser] = useState<any | null>(null);
     const [viewingUser, setViewingUser] = useState<any | null>(null);
     const [userToDelete, setUserToDelete] = useState<any | null>(null);
+    const [showPassword, setShowPassword] = useState(false);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -478,7 +480,7 @@ export default function UsuariosPage() {
                                 </SheetHeader>
                             </div>
                             
-                            <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden px-6">
+                            <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden px-6" autoComplete="off">
                                 <div className="space-y-5 flex-1 overflow-y-auto pr-2 custom-scrollbar pb-8">
                                     <div className="space-y-2">
                                         <Label className="text-zinc-400 text-xs">Nombre Completo</Label>
@@ -488,6 +490,7 @@ export default function UsuariosPage() {
                                             value={formData.nombre} 
                                             onChange={e => setFormData({...formData, nombre: e.target.value})} 
                                             className="bg-white/5 border-white/10 focus:border-primary/50" 
+                                            autoComplete="off"
                                         />
                                     </div>
                                     <div className="space-y-2">
@@ -500,6 +503,7 @@ export default function UsuariosPage() {
                                             onChange={e => setFormData({...formData, email: e.target.value})} 
                                             className="bg-white/5 border-white/10" 
                                             disabled={!!editingUser} 
+                                            autoComplete="off"
                                         />
                                     </div>
                                     {(!editingUser || userRole === 'Administrador Full') && (
@@ -507,14 +511,31 @@ export default function UsuariosPage() {
                                             <Label className="text-zinc-400 text-xs text-primary">
                                                 {editingUser ? "Nueva Contraseña (Opcional)" : "Contraseña Temporal"}
                                             </Label>
-                                            <Input 
-                                                required={!editingUser}
-                                                type="password" 
-                                                placeholder={editingUser ? "Dejar vacío para mantener actual" : "••••••••"} 
-                                                value={formData.password} 
-                                                onChange={e => setFormData({...formData, password: e.target.value})} 
-                                                className="bg-white/5 border-primary/20 focus:border-primary/50" 
-                                            />
+                                            <div className="relative">
+                                                <Input 
+                                                    required={!editingUser}
+                                                    type={showPassword ? "text" : "password"} 
+                                                    placeholder={editingUser ? "Dejar vacío para mantener actual" : "••••••••"} 
+                                                    value={formData.password} 
+                                                    onChange={e => setFormData({...formData, password: e.target.value})} 
+                                                    className="bg-white/5 border-primary/20 focus:border-primary/50 pr-10" 
+                                                    autoComplete="new-password"
+                                                    data-lpignore="true"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="absolute right-0 top-0 h-full w-9 hover:bg-transparent"
+                                                    onClick={() => setShowPassword(!showPassword)}
+                                                >
+                                                    {showPassword ? (
+                                                        <EyeOff className="h-4 w-4 text-zinc-500" />
+                                                    ) : (
+                                                        <Eye className="h-4 w-4 text-zinc-500" />
+                                                    )}
+                                                </Button>
+                                            </div>
                                             {editingUser && (
                                                 <p className="text-[10px] text-zinc-500 italic">Sólo visible para Administrador Full.</p>
                                             )}

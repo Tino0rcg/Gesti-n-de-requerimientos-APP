@@ -2,6 +2,7 @@
 
 import { createClient as createSupabaseJS } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { sendTicketNotification } from './notifications'
 
 function createAdminClient() {
   return createSupabaseJS(
@@ -57,6 +58,13 @@ export async function createTicketAction(data: {
             content: "[SISTEMA] Ticket creado e ingresado al catálogo de servicios operativo.",
         });
 
+        // Lanzar Notificación por Correo
+        try {
+            await sendTicketNotification(ticket.id, 'Nuevo Requerimiento Registrado', 'submitter');
+        } catch(e) {
+            console.error("Fallo de notificacion:", e);
+        }
+
         return { success: true };
     } catch (error: any) {
         return { success: false, error: error.message || "Error al crear ticket" };
@@ -76,9 +84,15 @@ export async function uploadImageAction(formData: FormData) {
         const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
         const filePath = `${fileName}`;
 
+        const arrayBuffer = await file.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+
         const { data, error } = await supabaseAdmin.storage
             .from('tickets')
-            .upload(filePath, file);
+            .upload(filePath, buffer, {
+                contentType: file.type,
+                upsert: false
+            });
 
         if (error) {
             return { success: false, error: `Error subiendo imagen: ${error.message}. Asegúrate de que el bucket 'tickets' sea público.` };
@@ -98,6 +112,9 @@ export async function updateTicketAction(id: string, data: any) {
     try {
         const supabaseAdmin = createAdminClient();
         
+        // Consultar el estado ANTERIOR del ticket para comparar
+        const { data: oldTicket } = await supabaseAdmin.from('tickets').select('status, tecnico_asignado_id').eq('id', id).single();
+        
         const { error } = await supabaseAdmin
             .from('tickets')
             .update({
@@ -108,6 +125,21 @@ export async function updateTicketAction(id: string, data: any) {
 
         if (error) {
             return { success: false, error: error.message };
+        }
+
+        // Lógicas de notificación automatizadas (State Transitions)
+        try {
+            // Regla 1: Asignación o Reasignación de Técnico
+            if (data.tecnico_asignado_id && oldTicket?.tecnico_asignado_id !== data.tecnico_asignado_id) {
+                await sendTicketNotification(id, 'Asignación de Nuevo Ticket', 'assignee');
+            }
+            
+            // Regla 2: Cambio de Estado (aviso al cliente)
+            if (data.status && oldTicket?.status !== data.status) {
+                await sendTicketNotification(id, `Tu ticket avanzó a la etapa: ${data.status}`, 'submitter');
+            }
+        } catch(e) {
+            console.error("Fallo de notificacion al transicionar:", e);
         }
 
         return { success: true };
@@ -206,6 +238,14 @@ export async function createNoteAction(ticketId: string, authorId: string, conte
         });
 
         if (error) return { success: false, error: error.message };
+
+        // Lanzar Notificación por Correo
+        try {
+            await sendTicketNotification(ticketId, 'Nueva evidencia agregada en Bitácora', 'submitter');
+        } catch(e) {
+            console.error("Fallo de notificacion:", e);
+        }
+
         return { success: true };
     } catch (error: any) {
         return { success: false, error: error.message || "Error al crear nota" };
